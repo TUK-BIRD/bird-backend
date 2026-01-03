@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Room;
+use App\Models\Space;
 use Illuminate\Http\Request;
 
 class RoomController extends Controller
@@ -10,9 +11,16 @@ class RoomController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request, Space $space)
     {
-        //
+//        return response()->json(
+//            $request->user()->spaces()->where('spaces.id', $request->space_id)->get()
+//        );
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+
+        return response()->json(
+            $space->rooms()->latest()->get()
+        );
     }
 
     /**
