@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Couchbase\Role;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasApiTokens;
 
     /**
      * The attributes that are mass assignable.
@@ -46,19 +47,13 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-
-    public function userRoles()
+    public function role()
     {
-        return $this->hasMany(UserRole::class);
+        return $this->hasOne(UserRole::class);
     }
 
-    public function roles()
+    public function spaces(): BelongsToMany
     {
-        return $this->userRoles->pluck('role');
-    }
-
-    public function hasRole(string $role): bool
-    {
-        return $this->roles()->contains($role);
+        return $this->belongsToMany(Space::class)->withPivot('role');
     }
 }

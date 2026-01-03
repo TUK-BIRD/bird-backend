@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\UserSpaceRole;
 use Illuminate\Database\Eloquent\Model;
 
-class UserSpace extends Model
+class SpaceUser extends Model
 {
     protected $table = 'user_spaces';
 

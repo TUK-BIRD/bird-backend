@@ -6,7 +6,7 @@ use App\Enums\UserSpaceRole;
 use App\Models\Space;
 use App\Models\User;
 use App\Models\UserRole;
-use App\Models\UserSpace;
+use App\Models\SpaceUser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -47,7 +47,7 @@ class UserService
                 'role' => \App\Enums\UserRole::ADMIN
             ]);
 
-            $userSpace = UserSpace::create([
+            $userSpace = SpaceUser::create([
                 'user_id' => $user->id,
                 'space_id' => $space->id,
                 'role' => UserSpaceRole::OWNER
