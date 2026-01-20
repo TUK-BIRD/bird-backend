@@ -18,8 +18,6 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-//        dd(request()->hasSession());
-
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
@@ -49,9 +47,8 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $user = $request->user();
-        $user->currentAccessToken()->delete();
-        \Log::info($request->user());
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
         return response()->json(['success' => 'true', 'message' => 'Logged out']);
     }
 }

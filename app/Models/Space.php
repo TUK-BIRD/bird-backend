@@ -6,6 +6,26 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string|null $description
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Room> $rooms
+ * @property-read int|null $rooms_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\User> $users
+ * @property-read int|null $users_count
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space query()
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space whereDescription($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space whereName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Space whereUpdatedAt($value)
+ * @mixin \Eloquent
+ */
 class Space extends Model
 {
     protected $table = 'spaces';
@@ -23,5 +43,10 @@ class Space extends Model
     public function rooms(): HasMany
     {
         return $this->hasMany(Room::class);
+    }
+
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(Invitation::class);
     }
 }
