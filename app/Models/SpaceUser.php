@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserSpaceRole;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
 /**
  * @property UserSpaceRole $role
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|SpaceUser query()
  * @mixin \Eloquent
  */
-class SpaceUser extends Model
+class SpaceUser extends Pivot
 {
     protected $table = 'space_user';
 
@@ -25,4 +26,14 @@ class SpaceUser extends Model
     protected $casts = [
         'role' => UserSpaceRole::class,
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function space()
+    {
+        return $this->belongsTo(Space::class);
+    }
 }

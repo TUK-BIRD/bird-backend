@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/spaces', [SpaceController::class, 'index']);
+    Route::get('/space/{space}/members', [SpaceController::class, 'members']);
     Route::get('/space/{space}/rooms', [RoomController::class, 'index']);
 
     Route::get('/spaces/{space}/invites', [SpaceInvitationController::class, 'index']);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Space;
+use App\Models\SpaceUser;
 use Illuminate\Http\Request;
 
 class SpaceController extends Controller
@@ -46,5 +47,13 @@ class SpaceController extends Controller
     public function destroy(Space $space)
     {
         //
+    }
+
+    public function members(Request $request, Space $space)
+    {
+        $space_users = SpaceUser::with('user')
+            ->where('space_id', $space->id)
+            ->get();
+        return $space_users;
     }
 }
