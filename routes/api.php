@@ -7,6 +7,7 @@ use App\Http\Controllers\SpaceInvitationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/auth/token', [AuthController::class, 'token']); // 모바일용
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 
@@ -16,12 +17,14 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/token/logout', [AuthController::class, 'logoutToken']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/spaces', [SpaceController::class, 'index']);
     Route::get('/space/{space}/members', [SpaceController::class, 'members']);
     Route::get('/space/{space}/rooms', [RoomController::class, 'index']);
+    Route::get('/space/{space}/room/create', [RoomController::class, 'store']);
 
     Route::get('/spaces/{space}/invites', [SpaceInvitationController::class, 'index']);
     Route::post('/spaces/{space}/invite', [SpaceInvitationController::class, 'store']);
