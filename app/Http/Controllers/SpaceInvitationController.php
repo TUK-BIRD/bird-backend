@@ -14,6 +14,11 @@ use Illuminate\Support\Str;
 
 class SpaceInvitationController extends Controller
 {
+    /**
+     * 모든 초대 조회
+     * @param Space $space
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function index(Space $space)
     {
         $invites = $space->invitations;
@@ -21,6 +26,10 @@ class SpaceInvitationController extends Controller
     }
 
     /**
+     * 초대 저장
+     * @param StoreInvitationRequest $request
+     * @param Space $space
+     * @return \Illuminate\Http\JsonResponse|void
      * @throws \Throwable
      */
     public function store(StoreInvitationRequest $request, Space $space)
@@ -58,6 +67,12 @@ class SpaceInvitationController extends Controller
         });
     }
 
+    /**
+     * 초대 수락
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     * @throws \Throwable
+     */
     public function accept(Request $request)
     {
         $request->validate(['token' => 'required']);
