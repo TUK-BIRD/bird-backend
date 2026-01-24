@@ -9,7 +9,9 @@ use Illuminate\Http\Request;
 class SpaceController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * 전체 Space 조회
+     * @param Request $request
+     * @return \Illuminate\Database\Eloquent\Collection|mixed
      */
     public function index(Request $request)
     {
@@ -49,7 +51,12 @@ class SpaceController extends Controller
         //
     }
 
-    public function members(Request $request, Space $space)
+    /**
+     * 해당 공간의 유저 조회
+     * @param Space $space
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function members(Space $space)
     {
         $space_users = SpaceUser::with('user')
             ->where('space_id', $space->id)

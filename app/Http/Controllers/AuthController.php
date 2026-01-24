@@ -18,6 +18,11 @@ class AuthController extends Controller
         $this->userService = $userService;
     }
 
+    /**
+     * 웹 로그인
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -37,6 +42,12 @@ class AuthController extends Controller
         ]);
     }
 
+
+    /**
+     * 웹 회원가입
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function register(Request $request)
     {
         try {
@@ -47,6 +58,11 @@ class AuthController extends Controller
         }
     }
 
+    /**
+     * 웹 로그아웃
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function logout(Request $request)
     {
         $request->session()->invalidate();
@@ -54,12 +70,16 @@ class AuthController extends Controller
         return response()->json(['success' => 'true', 'message' => 'Logged out']);
     }
 
+    /**
+     * 모바일 토큰 발급 (로그인)
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function token(Request $request)
     {
         $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
-            'device_name' => ['required'],
         ]);
 
         $user = User::where('email', $request->email)->first();
@@ -70,7 +90,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken($request->device_name)->plainTextToken;
+        $token = $user->createToken('mobile-token')->plainTextToken;
 
         return response()->json([
             'token' => $token,
@@ -78,6 +98,11 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * 모바일 로그아웃
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function logoutToken(Request $request)
     {
         $request->user()->currentAccessToken()->delete();

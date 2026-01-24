@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -37,5 +38,20 @@ class Room extends Model
     public function space(): BelongsTo
     {
         return $this->belongsTo(Space::class);
+    }
+
+    public function referencePoints(): HasMany
+    {
+        return $this->hasMany(ReferencePoint::class, 'room_id');
+    }
+
+    public function bleAnchors(): HasMany
+    {
+        return $this->hasMany(BleAnchor::class, 'room_id');
+    }
+
+    public function radiomapSessions(): HasMany
+    {
+        return $this->hasMany(RadiomapSession::class, 'room_id');
     }
 }
