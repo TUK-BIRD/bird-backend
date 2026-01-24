@@ -9,7 +9,10 @@ use Illuminate\Http\Request;
 class RoomController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * 전체 Room 조회
+     * @param Request $request
+     * @param Space $space
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request, Space $space)
     {
@@ -24,11 +27,21 @@ class RoomController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * 새로운 Room 등록
+     * @param Space $space
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request)
+    public function store(Space $space)
     {
-        //
+        $space->rooms()->create([
+            'name' => "Test",
+            'description' => "Test Description",
+            'space_id' => $space->id,
+        ]);
+
+        return response()->json(
+            $space->rooms()->latest()->get()
+        );
     }
 
     /**
