@@ -28,19 +28,31 @@ class RoomController extends Controller
 
     /**
      * 새로운 Room 등록
+     * @param Request $request
      * @param Space $space
      * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Space $space)
+    public function store(Request $request, Space $space)
     {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'string|max:255',
+            'space_id' => 'required|integer|exists:spaces,id',
+            'blueprint_json' => 'json'
+        ]);
+
+        $bp = $request->get('blueprint_json');
+        $decoded = $bp ? json_decode($bp, true) : null;
+
         $space->rooms()->create([
-            'name' => "Test",
-            'description' => "Test Description",
-            'space_id' => $space->id,
+            'name' => $request->get('name'),
+            'description' => $request->get('description'),
+            'space_id' => $request->get('space_id'),
+            'blueprint_json' => $decoded,
         ]);
 
         return response()->json(
-            $space->rooms()->latest()->get()
+            $request->get('blueprint_json')
         );
     }
 
