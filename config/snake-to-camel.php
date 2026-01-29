@@ -34,5 +34,5 @@ return [
     | - api: Applies only to routes in the "api" middleware group
     |
     */
-    'apply_to' => 'all', // Options: 'all', 'api'
+    'apply_to' => 'api', // Options: 'all', 'api'
 ];
