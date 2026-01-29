@@ -33,6 +33,7 @@ class Room extends Model
     protected $fillable = [
         'name',
         'description',
+        'blueprint_json'
     ];
 
     public function space(): BelongsTo
@@ -54,4 +55,8 @@ class Room extends Model
     {
         return $this->hasMany(RadiomapSession::class, 'room_id');
     }
+
+    protected $casts = [
+        'blueprint_json' => 'array',
+    ];
 }
