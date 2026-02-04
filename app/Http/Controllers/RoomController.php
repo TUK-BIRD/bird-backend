@@ -59,9 +59,12 @@ class RoomController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Room $room)
+    public function show(Request $request, Space $space, Room $room)
     {
-        //
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        return response()->json($room);
     }
 
     /**
@@ -75,8 +78,16 @@ class RoomController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Room $room)
+    public function destroy(Request $request, Space $space, Room $room)
     {
-        //
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        $room->delete();
+
+        return response()->json([
+            'deleted' => true,
+            'room_id' => $room->id,
+        ]);
     }
 }
