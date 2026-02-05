@@ -34,9 +34,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // 공간 관련 라우트
     Route::get('/spaces', [SpaceController::class, 'index']);
     Route::get('/space/{space}/members', [SpaceController::class, 'members']);
+    Route::patch('/space/{space}/members/{user}/role', [SpaceController::class, 'updateMemberRole']);
+    Route::delete('/space/{space}/members/{user}', [SpaceController::class, 'removeMember']);
     Route::get('/space/{space}/rooms', [RoomController::class, 'index']);
     Route::get('/spaces/{space}/rooms/{room}', [RoomController::class, 'show']);
     Route::post('/space/{space}/room/create', [RoomController::class, 'store']);
+    Route::patch('/spaces/{space}/rooms/{room}', [RoomController::class, 'update']);
     Route::delete('/spaces/{space}/rooms/{room}', [RoomController::class, 'destroy']);
 
     Route::get('/spaces/{space}/invites', [SpaceInvitationController::class, 'index']);
