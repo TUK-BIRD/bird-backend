@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Room;
 use App\Models\Space;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class RoomController extends Controller
 {
@@ -70,9 +71,58 @@ class RoomController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Room $room)
+    public function update(Request $request, Space $space, Room $room)
     {
-        //
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
+            'description' => 'sometimes|nullable|string|max:255',
+            'blueprint_json' => 'sometimes',
+        ]);
+
+        $validator->after(function ($validator) use ($request) {
+            if (!$request->has('blueprint_json')) {
+                return;
+            }
+
+            $bp = $request->input('blueprint_json');
+            if (is_string($bp)) {
+                json_decode($bp, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $validator->errors()->add('blueprint_json', 'Must be valid JSON string or array.');
+                }
+                return;
+            }
+
+            if (!is_array($bp) && !is_null($bp)) {
+                $validator->errors()->add('blueprint_json', 'Must be JSON string, array, or null.');
+            }
+        });
+
+        $validated = $validator->validate();
+
+        $update = [];
+        if (array_key_exists('name', $validated)) {
+            $update['name'] = $validated['name'];
+        }
+        if (array_key_exists('description', $validated)) {
+            $update['description'] = $validated['description'];
+        }
+        if ($request->has('blueprint_json')) {
+            $bp = $request->input('blueprint_json');
+            if (is_string($bp)) {
+                $bp = json_decode($bp, true);
+            }
+            $update['blueprint_json'] = $bp;
+        }
+
+        if (!empty($update)) {
+            $room->update($update);
+        }
+
+        return response()->json($room->fresh());
     }
 
     /**
