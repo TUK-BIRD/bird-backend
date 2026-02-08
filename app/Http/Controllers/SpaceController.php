@@ -8,6 +8,7 @@ use App\Models\Space;
 use App\Models\SpaceUser;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SpaceController extends Controller
 {
@@ -27,7 +28,22 @@ class SpaceController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return DB::transaction(function () use ($request, $validated) {
+            $space = Space::create($validated);
+
+            SpaceUser::create([
+                'user_id' => $request->user()->id,
+                'space_id' => $space->id,
+                'role' => UserSpaceRole::OWNER,
+            ]);
+
+            return response()->json($space, 201);
+        });
     }
 
     /**

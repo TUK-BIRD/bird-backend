@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/radiomap/create');
 
     // 공간 관련 라우트
+    Route::post('/spaces', [SpaceController::class, 'store']);
     Route::get('/spaces', [SpaceController::class, 'index']);
     Route::get('/space/{space}/members', [SpaceController::class, 'members']);
     Route::patch('/space/{space}/members/{user}/role', [SpaceController::class, 'updateMemberRole']);
