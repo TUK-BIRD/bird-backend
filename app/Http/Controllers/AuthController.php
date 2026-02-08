@@ -25,20 +25,15 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required'],
-        ]);
+        $result = $this->userService->login($request);
 
-        if (!Auth::attempt($credentials)) {
+        if (!$result['ok']) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $request->session()->regenerate();  // 세션 재생성
-
         return response()->json([
             'message' => 'Login successful',
-            'user' => $request->user(),
+            'user' => $result['user'],
         ]);
     }
 
@@ -65,6 +60,8 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+        Auth::guard('web')->logout();
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return response()->json(['success' => 'true', 'message' => 'Logged out']);
