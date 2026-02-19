@@ -33,7 +33,8 @@ class Room extends Model
     protected $fillable = [
         'name',
         'description',
-        'blueprint_json'
+        'blueprint_json',
+        'info_json',
     ];
 
     public function space(): BelongsTo
@@ -58,5 +59,6 @@ class Room extends Model
 
     protected $casts = [
         'blueprint_json' => 'array',
+        'info_json' => 'array',
     ];
 }
