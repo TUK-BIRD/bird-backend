@@ -39,17 +39,21 @@ class RoomController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'string|max:255',
             'space_id' => 'required|integer|exists:spaces,id',
-            'blueprint_json' => 'json'
+            'blueprint_json' => 'json',
+            'info_json' => 'json'
         ]);
 
         $bp = $request->get('blueprint_json');
         $decoded = $bp ? json_decode($bp, true) : null;
+
+        $info = $bp ? json_decode($bp, true) : null;
 
         $room = $space->rooms()->create([
             'name' => $request->get('name'),
             'description' => $request->get('description'),
             'space_id' => $request->get('space_id'),
             'blueprint_json' => $decoded,
+            'info_json' => $info
         ]);
 
         return response()->json($room, 201);

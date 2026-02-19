@@ -12,6 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         //
+        Schema::table('rooms', function (Blueprint $table) {
+            // 기존 필드 뒤에 추가하고 싶다면 ->after('기존필드명')을 붙이세요.
+            $table->json('info_json')->nullable()->comment('정보 데이터');
+        });
     }
 
     /**
