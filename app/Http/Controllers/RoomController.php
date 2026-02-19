@@ -45,16 +45,14 @@ class RoomController extends Controller
         $bp = $request->get('blueprint_json');
         $decoded = $bp ? json_decode($bp, true) : null;
 
-        $space->rooms()->create([
+        $room = $space->rooms()->create([
             'name' => $request->get('name'),
             'description' => $request->get('description'),
             'space_id' => $request->get('space_id'),
             'blueprint_json' => $decoded,
         ]);
 
-        return response()->json(
-            $request->get('blueprint_json')
-        );
+        return response()->json($room, 201);
     }
 
     /**

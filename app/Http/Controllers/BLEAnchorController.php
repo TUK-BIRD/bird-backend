@@ -36,6 +36,6 @@ class BLEAnchorController extends Controller
             'installed_at' => now(),
         ]);
 
-        return json_encode($anchor);
+        return response()->json($anchor, 201);
     }
 }

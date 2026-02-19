@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BLEAnchorController;
+use App\Http\Controllers\RadiomapController;
+use App\Http\Controllers\ReferencePointController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SpaceController;
 use App\Http\Controllers\SpaceInvitationController;
@@ -27,9 +29,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get("/ble_anchors", [BLEAnchorController::class, 'index']);
     Route::post("/ble_anchors", [BLEAnchorController::class, 'store']);
 
+    // Reference Point 라우트
+    Route::get("/reference_points", [ReferencePointController::class, 'index']);
+    Route::post("/reference_points", [ReferencePointController::class, 'store']);
 
     // 라디오 앱 구축 라우트
-    Route::post('/radiomap/create');
+    Route::post('/radiomap/create', [RadiomapController::class, 'store']);
+
 
     // 공간 관련 라우트
     Route::post('/spaces', [SpaceController::class, 'store']);

@@ -37,7 +37,7 @@ class SpaceInvitationMail extends Mailable
      */
     public function content(): Content
     {
-        $acceptUrl = config('app.frontend_url') . "/invitations/accept?token={$this->invitation->token}";
+        $acceptUrl = config('app.frontend_url') . "/admin/invitations/accept?token={$this->invitation->token}";
 
         return new Content(
             view: 'emails.space_invitation', // resources/views/emails/space_invitation.blade.php
