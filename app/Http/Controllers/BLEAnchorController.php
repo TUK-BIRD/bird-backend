@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\BleAnchor;
+use App\Models\Room;
+use App\Models\Space;
 use Illuminate\Http\Request;
 
 class BLEAnchorController extends Controller
@@ -10,9 +12,21 @@ class BLEAnchorController extends Controller
     /**
      * ESP32 전체 조회
      */
-    public function index()
+    public function index(Request $request)
     {
+        $request->validate([
+            'room_id' => 'nullable|integer|exists:rooms,id',
+        ]);
 
+        $query = BleAnchor::query()->whereNotNull('installed_at');
+
+        if ($request->filled('room_id')) {
+            $query->where('room_id', $request->room_id);
+        }
+
+        return response()->json(
+            $query->latest('installed_at')->get()
+        );
     }
 
     /**
@@ -37,5 +51,43 @@ class BLEAnchorController extends Controller
         ]);
 
         return response()->json($anchor, 201);
+    }
+
+    /**
+     * 특정 Room에 설치된 ESP32(BleAnchor) 조회
+     */
+    public function roomIndex(Request $request, Space $space, Room $room)
+    {
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        return response()->json(
+            $room->bleAnchors()
+                ->whereNotNull('installed_at')
+                ->latest('installed_at')
+                ->get()
+        );
+    }
+
+    /**
+     * 특정 Room의 ESP32(BleAnchor) 삭제
+     */
+    public function destroy(Request $request, BleAnchor $anchor)
+    {
+        $room = $anchor->room;
+        abort_unless($room !== null, 404);
+
+        $space = $room->space;
+        abort_unless($space !== null, 404);
+
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+
+        $anchorId = $anchor->id;
+        $anchor->delete();
+
+        return response()->json([
+            'deleted' => true,
+            'anchor_id' => $anchorId,
+        ]);
     }
 }

@@ -28,6 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ESP32 Setup 라우트
     Route::get("/ble_anchors", [BLEAnchorController::class, 'index']);
     Route::post("/ble_anchors", [BLEAnchorController::class, 'store']);
+    Route::delete('/ble_anchors/{anchor}', [BLEAnchorController::class, 'destroy']);
 
     // Reference Point 라우트
     Route::get("/reference_points", [ReferencePointController::class, 'index']);
@@ -35,7 +36,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 라디오 앱 구축 라우트
     Route::post('/radiomap/create', [RadiomapController::class, 'store']);
-
 
     // 공간 관련 라우트
     Route::post('/spaces', [SpaceController::class, 'store']);
@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/space/{space}/members/{user}', [SpaceController::class, 'removeMember']);
     Route::get('/space/{space}/rooms', [RoomController::class, 'index']);
     Route::get('/spaces/{space}/rooms/{room}', [RoomController::class, 'show']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_anchors', [BLEAnchorController::class, 'roomIndex']);
     Route::post('/space/{space}/room/create', [RoomController::class, 'store']);
     Route::patch('/spaces/{space}/rooms/{room}', [RoomController::class, 'update']);
     Route::delete('/spaces/{space}/rooms/{room}', [RoomController::class, 'destroy']);
