@@ -28,7 +28,7 @@ class RadiomapController extends Controller
             'room_id' => ['nullable', 'integer', 'exists:rooms,id'],
             'measurements' => ['required', 'array', 'min:1'],
             'measurements.*.reference_point_id' => ['required', 'integer', 'exists:reference_points,id'],
-            'measurements.*.anchor_id' => ['required', 'integer', 'exists:anchors,id'],
+            'measurements.*.anchor_id' => ['required', 'integer', 'exists:ble_anchors,id'],
             'measurements.*.rssi_dbm' => ['required', 'integer'],
         ]);
 
