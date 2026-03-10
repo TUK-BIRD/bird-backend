@@ -144,14 +144,14 @@ class MqttListenScannedDevices extends Command
         }
 
         return BleAnchor::query()
-            ->where('anchor_uid', (string) $anchorValue)
+            ->where('anchor_uid', strtolower((string) $anchorValue))
             ->first();
     }
 
     private function resolveRoomIdFromMac(string $mac): ?int
     {
         $anchor = BleAnchor::query()
-            ->where('anchor_uid', $mac)
+            ->where('anchor_uid', strtolower($mac))
             ->first();
 
         return $anchor?->room_id;

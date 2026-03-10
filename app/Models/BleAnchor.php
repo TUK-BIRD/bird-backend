@@ -25,6 +25,11 @@ class BleAnchor extends Model
         'installed_at' => 'datetime',
     ];
 
+    public function setAnchorUidAttribute(?string $value): void
+    {
+        $this->attributes['anchor_uid'] = $value !== null ? strtolower($value) : null;
+    }
+
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
