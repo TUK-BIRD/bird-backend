@@ -46,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/space/{space}/rooms', [RoomController::class, 'index']);
     Route::get('/spaces/{space}/rooms/{room}', [RoomController::class, 'show']);
     Route::get('/spaces/{space}/rooms/{room}/ble_anchors', [BLEAnchorController::class, 'roomIndex']);
+    Route::post('/spaces/{space}/rooms/{room}/scan-control', [BLEAnchorController::class, 'controlRoomScan']);
     Route::post('/space/{space}/room/create', [RoomController::class, 'store']);
     Route::patch('/spaces/{space}/rooms/{room}', [RoomController::class, 'update']);
     Route::delete('/spaces/{space}/rooms/{room}', [RoomController::class, 'destroy']);

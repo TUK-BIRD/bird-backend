@@ -6,6 +6,8 @@ use App\Models\BleAnchor;
 use App\Models\Room;
 use App\Models\Space;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use PhpMqtt\Client\Facades\MQTT;
 
 class BLEAnchorController extends Controller
 {
@@ -88,6 +90,76 @@ class BLEAnchorController extends Controller
         return response()->json([
             'deleted' => true,
             'anchor_id' => $anchorId,
+        ]);
+    }
+
+    /**
+     * 특정 Room의 모든 ESP32(BleAnchor)에 스캔 on/off 제어 publish
+     */
+    public function controlRoomScan(Request $request, Space $space, Room $room)
+    {
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        $validated = $request->validate([
+            'state' => 'required|in:on,off',
+        ]);
+
+        $anchors = $room->bleAnchors()
+            ->whereNotNull('installed_at')
+            ->get(['id', 'anchor_uid']);
+
+        $mqtt = MQTT::connection();
+        $retain = true;
+        $published = [];
+        $errors = [];
+
+        foreach ($anchors as $anchor) {
+            $scannerId = strtolower($anchor->anchor_uid);
+            $topic = str_replace(
+                '{scanner_id}',
+                $scannerId,
+                config(
+                    'mqtt_topics.anchor_control_publish_pattern',
+                    'bird/anchor/{scanner_id}/control'
+                )
+            );
+
+            try {
+                $mqtt->publish($topic, $validated['state'], 1, $retain);
+                $published[] = [
+                    'anchor_id' => $anchor->id,
+                    'anchor_uid' => $scannerId,
+                    'topic' => $topic,
+                ];
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'anchor_id' => $anchor->id,
+                    'anchor_uid' => $scannerId,
+                    'topic' => $topic,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        if (!empty($published)) {
+            $mqtt->loop(true, true);
+        }
+        MQTT::disconnect();
+
+        Log::info('MQTT scan control publish.', [
+            'room_id' => $room->id,
+            'state' => $validated['state'],
+            'published_count' => count($published),
+            'error_count' => count($errors),
+        ]);
+
+        return response()->json([
+            'room_id' => $room->id,
+            'state' => $validated['state'],
+            'anchor_count' => count($published),
+            'published' => $published,
+            'errors' => $errors,
         ]);
     }
 }
