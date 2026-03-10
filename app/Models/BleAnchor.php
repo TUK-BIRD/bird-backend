@@ -34,4 +34,9 @@ class BleAnchor extends Model
     {
         return $this->hasMany(RadiomapMeasurement::class, 'anchor_id');
     }
+
+    public function bleScanEvents(): HasMany
+    {
+        return $this->hasMany(BleScanEvent::class, 'anchor_id');
+    }
 }

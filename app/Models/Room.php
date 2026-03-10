@@ -57,6 +57,11 @@ class Room extends Model
         return $this->hasMany(RadiomapSession::class, 'room_id');
     }
 
+    public function bleScanEvents(): HasMany
+    {
+        return $this->hasMany(BleScanEvent::class, 'room_id');
+    }
+
     protected $casts = [
         'blueprint_json' => 'array',
         'info_json' => 'array',
