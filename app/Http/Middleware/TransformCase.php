@@ -59,7 +59,7 @@ class TransformCase
     {
         if ($response instanceof JsonResponse) {
             $data = $response->getData(true);
-            $response->setData($this->convertArrayKeys($data, 'camel'));
+            $response->setData($this->convertValue($data, 'camel'));
             return;
         }
 
@@ -69,14 +69,23 @@ class TransformCase
         }
 
         $decoded = json_decode($response->getContent(), true);
-        if (! is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
             return;
         }
 
         $response->setContent(json_encode(
-            $this->convertArrayKeys($decoded, 'camel'),
+            $this->convertValue($decoded, 'camel'),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         ));
+    }
+
+    private function convertValue(mixed $value, string $mode): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        return $this->convertArrayKeys($value, $mode);
     }
 
     private function convertArrayKeys(array $data, string $mode): array
