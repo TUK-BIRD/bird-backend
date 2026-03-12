@@ -16,8 +16,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "php-mqtt/client": "^2.3",
-        "php-mqtt/laravel-client": "^1.7",
-        "rizkussef/laravel-snake-to-camel-case": "^1.0"
+        "php-mqtt/laravel-client": "^1.7"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.6",
