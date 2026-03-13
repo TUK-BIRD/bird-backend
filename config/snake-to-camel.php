@@ -21,8 +21,7 @@ return [
     | to snake_case automatically.
     |
     */
-    'convert_request'  => true, // Convert camelCase to snake_case in incoming requests
-
+    'convert_request' => true, // Convert camelCase to snake_case in incoming requests
 
     /*
     |--------------------------------------------------------------------------

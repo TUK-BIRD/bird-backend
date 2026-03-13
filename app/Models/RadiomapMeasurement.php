@@ -14,7 +14,7 @@ class RadiomapMeasurement extends Model
         'reference_point_id',
         'anchor_id',
         'rssi_dbm',
-        'measured_at'
+        'measured_at',
     ];
 
     protected $casts = [

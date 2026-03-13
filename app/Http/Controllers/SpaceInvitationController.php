@@ -7,6 +7,7 @@ use App\Mail\SpaceInvitationMail;
 use App\Models\Invitation;
 use App\Models\Space;
 use App\Models\SpaceUser;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -16,20 +17,21 @@ class SpaceInvitationController extends Controller
 {
     /**
      * 모든 초대 조회
-     * @param Space $space
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function index(Space $space)
     {
         $invites = $space->invitations;
+
         return response()->json($invites);
     }
 
     /**
      * 초대 저장
-     * @param StoreInvitationRequest $request
-     * @param Space $space
-     * @return \Illuminate\Http\JsonResponse|void
+     *
+     * @return JsonResponse|void
+     *
      * @throws \Throwable
      */
     public function store(StoreInvitationRequest $request, Space $space)
@@ -69,8 +71,9 @@ class SpaceInvitationController extends Controller
 
     /**
      * 초대 수락
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse|void
+     *
+     * @return JsonResponse|void
+     *
      * @throws \Throwable
      */
     public function accept(Request $request)
@@ -80,10 +83,9 @@ class SpaceInvitationController extends Controller
             ->where('status', 'PENDING')
             ->first();
 
-        if (!$invitation) {
+        if (! $invitation) {
             return response()->json(['message' => '유효하지 않거나 만료된 초대장입니다.'], 404);
         }
-
 
         if ($invitation->email !== auth()->user()->email) {
             return response()->json([
@@ -94,7 +96,6 @@ class SpaceInvitationController extends Controller
         $exists = SpaceUser::where('space_id', $invitation->space_id)
             ->where('user_id', auth()->id())
             ->exists();
-
 
         if ($exists) {
             return response()->json(['message' => '이미 멤버입니다.'], 409);

@@ -32,7 +32,6 @@ class RadiomapController extends Controller
             'measurements.*.rssi_dbm' => ['required', 'integer'],
         ]);
 
-
         $session = RadiomapSession::create([
             'room_id' => $request->room_id,
             'started_at' => now(),

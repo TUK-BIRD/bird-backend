@@ -4,15 +4,14 @@ namespace App\Services;
 
 use App\Enums\UserSpaceRole;
 use App\Models\Space;
+use App\Models\SpaceUser;
 use App\Models\User;
 use App\Models\UserRole;
-use App\Models\SpaceUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\ValidationException;
 
 class UserService
@@ -38,7 +37,7 @@ class UserService
         }
 
         return DB::transaction(function () use ($data) {
-            $skipSpaceCreate = !empty($data['skip_space_create']);
+            $skipSpaceCreate = ! empty($data['skip_space_create']);
 
             $user = User::create([
                 'name' => $data['name'],
@@ -46,7 +45,7 @@ class UserService
                 'password' => Hash::make($data['password']),
             ]);
 
-            if (!$skipSpaceCreate) {
+            if (! $skipSpaceCreate) {
                 $space = Space::create([
                     'name' => $data['space_name'],
                     'description' => $data['space_description'],
@@ -55,18 +54,18 @@ class UserService
 
             $userRole = UserRole::create([
                 'user_id' => $user->id,
-                'role' => \App\Enums\UserRole::ADMIN
+                'role' => \App\Enums\UserRole::ADMIN,
             ]);
 
-            if (!$skipSpaceCreate) {
+            if (! $skipSpaceCreate) {
                 $userSpace = SpaceUser::create([
                     'user_id' => $user->id,
                     'space_id' => $space->id,
-                    'role' => UserSpaceRole::OWNER
+                    'role' => UserSpaceRole::OWNER,
                 ]);
             }
 
-            return "asdf";
+            return 'asdf';
         });
     }
 
@@ -77,7 +76,7 @@ class UserService
             'password' => ['required'],
         ]);
 
-        if (!Auth::attempt($credentials)) {
+        if (! Auth::attempt($credentials)) {
             return [
                 'ok' => false,
             ];
@@ -91,10 +90,5 @@ class UserService
         ];
     }
 
-    public function logout()
-    {
-
-    }
-
-
+    public function logout() {}
 }

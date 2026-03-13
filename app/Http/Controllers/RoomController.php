@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Room;
 use App\Models\Space;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -11,15 +12,14 @@ class RoomController extends Controller
 {
     /**
      * 전체 Room 조회
-     * @param Request $request
-     * @param Space $space
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function index(Request $request, Space $space)
     {
-//        return response()->json(
-//            $request->user()->spaces()->where('spaces.id', $request->space_id)->get()
-//        );
+        //        return response()->json(
+        //            $request->user()->spaces()->where('spaces.id', $request->space_id)->get()
+        //        );
         abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
 
         return response()->json(
@@ -29,9 +29,8 @@ class RoomController extends Controller
 
     /**
      * 새로운 Room 등록
-     * @param Request $request
-     * @param Space $space
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function store(Request $request, Space $space)
     {
@@ -49,13 +48,12 @@ class RoomController extends Controller
         $_info = $request->get('info_json');
         $d_info = $_info ? json_decode($_info, true) : null;
 
-
         $room = $space->rooms()->create([
             'name' => $request->get('name'),
             'description' => $request->get('description'),
             'space_id' => $request->get('space_id'),
             'blueprint_json' => $decoded,
-            'info_json' => $d_info
+            'info_json' => $d_info,
         ]);
 
         return response()->json($room, 201);
@@ -87,7 +85,7 @@ class RoomController extends Controller
         ]);
 
         $validator->after(function ($validator) use ($request) {
-            if (!$request->has('blueprint_json')) {
+            if (! $request->has('blueprint_json')) {
                 return;
             }
 
@@ -97,10 +95,11 @@ class RoomController extends Controller
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     $validator->errors()->add('blueprint_json', 'Must be valid JSON string or array.');
                 }
+
                 return;
             }
 
-            if (!is_array($bp) && !is_null($bp)) {
+            if (! is_array($bp) && ! is_null($bp)) {
                 $validator->errors()->add('blueprint_json', 'Must be JSON string, array, or null.');
             }
         });
@@ -122,7 +121,7 @@ class RoomController extends Controller
             $update['blueprint_json'] = $bp;
         }
 
-        if (!empty($update)) {
+        if (! empty($update)) {
             $room->update($update);
         }
 

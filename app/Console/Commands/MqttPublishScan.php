@@ -31,11 +31,13 @@ class MqttPublishScan extends Command
 
         if ($scannerId === null) {
             $this->error('Invalid scanner_id. Expected MAC format like dc:b4:d9:9b:c3:9c');
+
             return self::FAILURE;
         }
 
-        if (!in_array($state, ['on', 'off'], true)) {
+        if (! in_array($state, ['on', 'off'], true)) {
             $this->error('Invalid state. Use "on" or "off".');
+
             return self::FAILURE;
         }
 
@@ -56,10 +58,12 @@ class MqttPublishScan extends Command
             $mqtt->loop(true, true);
             MQTT::disconnect();
 
-            $this->info("Published {$state} to {$topic} (QoS=1, retain=" . ($retain ? 'true' : 'false') . ')');
+            $this->info("Published {$state} to {$topic} (QoS=1, retain=".($retain ? 'true' : 'false').')');
+
             return self::SUCCESS;
         } catch (\Throwable $e) {
-            $this->error('Publish failed: ' . $e->getMessage());
+            $this->error('Publish failed: '.$e->getMessage());
+
             return self::FAILURE;
         }
     }

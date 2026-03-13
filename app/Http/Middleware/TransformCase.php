@@ -60,6 +60,7 @@ class TransformCase
         if ($response instanceof JsonResponse) {
             $data = $response->getData(true);
             $response->setData($this->convertValue($data, 'camel'));
+
             return;
         }
 
@@ -99,6 +100,7 @@ class TransformCase
 
             if (is_array($value)) {
                 $converted[$newKey] = $this->convertArrayKeys($value, $mode);
+
                 continue;
             }
 

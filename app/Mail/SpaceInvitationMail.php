@@ -4,8 +4,8 @@ namespace App\Mail;
 
 use App\Models\Invitation;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -37,7 +37,7 @@ class SpaceInvitationMail extends Mailable
      */
     public function content(): Content
     {
-        $acceptUrl = config('app.frontend_url') . "/admin/invitations/accept?token={$this->invitation->token}";
+        $acceptUrl = config('app.frontend_url')."/admin/invitations/accept?token={$this->invitation->token}";
 
         return new Content(
             view: 'emails.space_invitation', // resources/views/emails/space_invitation.blade.php
@@ -52,7 +52,7 @@ class SpaceInvitationMail extends Mailable
     /**
      * Get the attachments for the message.
      *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
+     * @return array<int, Attachment>
      */
     public function attachments(): array
     {
