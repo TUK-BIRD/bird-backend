@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\TransformCase;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,7 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
-        $middleware->append(\App\Http\Middleware\TransformCase::class);
+        $middleware->append(TransformCase::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -8,7 +8,6 @@ use Illuminate\Support\Str;
 
 class MakeServiceCommand extends Command
 {
-
     /**
      * The name and signature of the console command.
      *

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BleAnchor;
 use App\Models\Room;
+use App\Models\ScanStatusEvent;
 use App\Models\Space;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -33,8 +34,9 @@ class BLEAnchorController extends Controller
 
     /**
      * 새로운 ESP32 등록
-     * @param Request $request
-     * return string JSON-encoded BleAnchor object
+     *
+     * @param  Request  $request
+     *                            return string JSON-encoded BleAnchor object
      */
     public function store(Request $request)
     {
@@ -103,6 +105,14 @@ class BLEAnchorController extends Controller
 
         $validated = $request->validate([
             'state' => 'required|in:on,off',
+            'request_id' => 'nullable|string|max:64',
+        ]);
+
+        ScanStatusEvent::create([
+            'room_id' => $room->id,
+            'reported_state' => $validated['state'],
+            'request_id' => $validated['request_id'] ?? null,
+            'reported_at' => now(),
         ]);
 
         $anchors = $room->bleAnchors()
@@ -142,7 +152,7 @@ class BLEAnchorController extends Controller
             }
         }
 
-        if (!empty($published)) {
+        if (! empty($published)) {
             $mqtt->loop(true, true);
         }
         MQTT::disconnect();
@@ -160,6 +170,26 @@ class BLEAnchorController extends Controller
             'anchor_count' => count($published),
             'published' => $published,
             'errors' => $errors,
+        ]);
+    }
+
+    /**
+     * 특정 Room의 마지막 스캔 on/off 명령 조회
+     */
+    public function latestScanStatus(Request $request, Space $space, Room $room)
+    {
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        $latest = ScanStatusEvent::query()
+            ->where('room_id', $room->id)
+            ->latest('reported_at')
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'room_id' => $room->id,
+            'latest' => $latest,
         ]);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\UserService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -20,14 +21,14 @@ class AuthController extends Controller
 
     /**
      * 웹 로그인
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function login(Request $request)
     {
         $result = $this->userService->login($request);
 
-        if (!$result['ok']) {
+        if (! $result['ok']) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -37,16 +38,16 @@ class AuthController extends Controller
         ]);
     }
 
-
     /**
      * 웹 회원가입
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function register(Request $request)
     {
         try {
             $result = $this->userService->register($request->all());
+
             return response()->json($result, 201);
         } catch (ValidationException $e) {
             return response()->json($e->errors(), 422);
@@ -55,8 +56,8 @@ class AuthController extends Controller
 
     /**
      * 웹 로그아웃
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function logout(Request $request)
     {
@@ -64,13 +65,14 @@ class AuthController extends Controller
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return response()->json(['success' => 'true', 'message' => 'Logged out']);
     }
 
     /**
      * 모바일 토큰 발급 (로그인)
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function token(Request $request)
     {
@@ -81,7 +83,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -97,8 +99,8 @@ class AuthController extends Controller
 
     /**
      * 모바일 로그아웃
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function logoutToken(Request $request)
     {

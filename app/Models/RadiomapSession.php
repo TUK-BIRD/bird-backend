@@ -14,7 +14,7 @@ class RadiomapSession extends Model
         'room_id',
         'started_at',
         'ended_at',
-        'note'
+        'note',
     ];
 
     protected $casts = [

@@ -7,6 +7,8 @@ use App\Http\Requests\UpdateMemberRoleRequest;
 use App\Models\Space;
 use App\Models\SpaceUser;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -14,8 +16,8 @@ class SpaceController extends Controller
 {
     /**
      * 전체 Space 조회
-     * @param Request $request
-     * @return \Illuminate\Database\Eloquent\Collection|mixed
+     *
+     * @return Collection|mixed
      */
     public function index(Request $request)
     {
@@ -72,23 +74,22 @@ class SpaceController extends Controller
 
     /**
      * 해당 공간의 유저 조회
-     * @param Space $space
-     * @return \Illuminate\Database\Eloquent\Collection
+     *
+     * @return Collection
      */
     public function members(Space $space)
     {
         $space_users = SpaceUser::with('user')
             ->where('space_id', $space->id)
             ->get();
+
         return $space_users;
     }
 
     /**
      * 공간 멤버 권한 변경
-     * @param UpdateMemberRoleRequest $request
-     * @param Space $space
-     * @param User $user
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function updateMemberRole(UpdateMemberRoleRequest $request, Space $space, User $user)
     {
@@ -104,7 +105,7 @@ class SpaceController extends Controller
             ->where('user_id', $user->id)
             ->first();
 
-        if (!$target) {
+        if (! $target) {
             return response()->json(['message' => '해당 멤버를 찾을 수 없습니다.'], 404);
         }
 
@@ -131,10 +132,8 @@ class SpaceController extends Controller
 
     /**
      * 공간 멤버 삭제
-     * @param Request $request
-     * @param Space $space
-     * @param User $user
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function removeMember(Request $request, Space $space, User $user)
     {
@@ -150,7 +149,7 @@ class SpaceController extends Controller
             ->where('user_id', $user->id)
             ->first();
 
-        if (!$target) {
+        if (! $target) {
             return response()->json(['message' => '해당 멤버를 찾을 수 없습니다.'], 404);
         }
 

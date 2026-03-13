@@ -125,5 +125,4 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'http://bird.test:5173'),
 
-
 ];

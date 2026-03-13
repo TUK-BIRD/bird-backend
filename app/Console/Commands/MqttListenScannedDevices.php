@@ -40,7 +40,7 @@ class MqttListenScannedDevices extends Command
         $mqtt->subscribe($topic, function (string $topic, string $message): void {
             $decoded = json_decode($message, true);
 
-            if (!is_array($decoded)) {
+            if (! is_array($decoded)) {
                 $this->warn("[{$topic}] Invalid JSON payload: {$message}");
                 Log::warning('MQTT anchor scan payload is not valid JSON.', [
                     'topic' => $topic,
@@ -65,7 +65,7 @@ class MqttListenScannedDevices extends Command
                 }
 
                 $rssi = $device['rssi'] ?? $device['rssi_dbm'] ?? null;
-                if (!is_numeric($rssi)) {
+                if (! is_numeric($rssi)) {
                     continue;
                 }
 
@@ -193,7 +193,7 @@ class MqttListenScannedDevices extends Command
     private function resolveScannedAt(mixed $deviceScannedAt, mixed $payloadScannedAt): CarbonImmutable
     {
         $candidate = $deviceScannedAt ?? $payloadScannedAt;
-        if (!is_string($candidate) || trim($candidate) === '') {
+        if (! is_string($candidate) || trim($candidate) === '') {
             return CarbonImmutable::now();
         }
 

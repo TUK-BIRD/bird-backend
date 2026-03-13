@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -13,11 +14,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $space_id
  * @property int $inviter_id
  * @property string $status
- * @property \Illuminate\Support\Carbon $expires_at
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- * @property-read \App\Models\User $inviter
- * @property-read \App\Models\Space $space
+ * @property Carbon $expires_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read User $inviter
+ * @property-read Space $space
+ *
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Invitation newModelQuery()
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Invitation newQuery()
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Invitation query()
@@ -31,6 +33,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Invitation whereToken($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Invitation whereUpdatedAt($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Invitation whereUserSpaceRole($value)
+ *
  * @mixin \Eloquent
  */
 class Invitation extends Model
