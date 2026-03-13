@@ -50,7 +50,7 @@ class BLEAnchorController extends Controller
             'anchor_uid' => strtolower((string) $request->anchor_uid),
             'room_id' => $request->room_id,
             'label' => $request->label,
-            'tx_power_dbm' => $request->tx_power_dbm ?? 9,
+            'tx_power_dbm' => 9,
             'installed_at' => now(),
         ]);
 
