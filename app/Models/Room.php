@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -64,6 +65,11 @@ class Room extends Model
     public function bleScanEvents(): HasMany
     {
         return $this->hasMany(BleScanEvent::class, 'room_id');
+    }
+
+    public function generatedRadiomap(): HasOne
+    {
+        return $this->hasOne(GeneratedRadiomap::class, 'room_id');
     }
 
     protected $casts = [
