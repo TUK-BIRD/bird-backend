@@ -6,6 +6,7 @@ use App\Models\BleAnchor;
 use App\Models\Room;
 use App\Models\ScanStatusEvent;
 use App\Models\Space;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use PhpMqtt\Client\Facades\MQTT;
@@ -71,6 +72,27 @@ class BLEAnchorController extends Controller
                 ->latest('installed_at')
                 ->get()
         );
+    }
+
+    /**
+     * 특정 Room에 설치된 ESP32(BleAnchor)의 health 요약 조회
+     */
+    public function roomHealthIndex(Request $request, Space $space, Room $room)
+    {
+        abort_unless($request->user()->spaces()->where('spaces.id', $space->id)->exists(), 403);
+        abort_unless($room->space_id === $space->id, 404);
+
+        $anchors = $room->bleAnchors()
+            ->whereNotNull('installed_at')
+            ->latest('installed_at')
+            ->get();
+
+        return response()->json([
+            'room_id' => $room->id,
+            'space_id' => $space->id,
+            'summary' => $this->buildHealthSummary($anchors),
+            'anchors' => $anchors->map(fn (BleAnchor $anchor) => $this->formatHealthAnchor($anchor))->values(),
+        ]);
     }
 
     /**
@@ -191,5 +213,38 @@ class BLEAnchorController extends Controller
             'room_id' => $room->id,
             'latest' => $latest,
         ]);
+    }
+
+    private function buildHealthSummary(Collection $anchors): array
+    {
+        $grouped = $anchors
+            ->map(fn (BleAnchor $anchor) => $anchor->health_state)
+            ->countBy();
+
+        return [
+            'total' => $anchors->count(),
+            'online' => (int) ($grouped->get('online') ?? 0),
+            'degraded' => (int) ($grouped->get('degraded') ?? 0),
+            'offline' => (int) ($grouped->get('offline') ?? 0),
+            'unknown' => (int) ($grouped->get('unknown') ?? 0),
+        ];
+    }
+
+    private function formatHealthAnchor(BleAnchor $anchor): array
+    {
+        return [
+            'id' => $anchor->id,
+            'anchor_uid' => $anchor->anchor_uid,
+            'label' => $anchor->label,
+            'room_id' => $anchor->room_id,
+            'installed_at' => $anchor->installed_at?->toIso8601String(),
+            'health_state' => $anchor->health_state,
+            'health_status' => $anchor->health_status,
+            'health_is_stale' => $anchor->health_is_stale,
+            'last_health_payload_at' => $anchor->health_last_payload_at?->toIso8601String(),
+            'wifi_connected' => $anchor->health_wifi_connected,
+            'mqtt_connected' => $anchor->health_mqtt_connected,
+            'scan_enabled' => $anchor->health_scan_enabled,
+        ];
     }
 }
