@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BLEAnchorController;
+use App\Http\Controllers\BleScanEventController;
 use App\Http\Controllers\RadiomapController;
 use App\Http\Controllers\ReferencePointController;
 use App\Http\Controllers\RoomController;
@@ -56,4 +57,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/spaces/{space}/invites', [SpaceInvitationController::class, 'index']);
     Route::post('/spaces/{space}/invite', [SpaceInvitationController::class, 'store']);
     Route::post('/spaces/invite/accept', [SpaceInvitationController::class, 'accept']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/dashboard', [BleScanEventController::class, 'dashboard']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/multi-anchor-dashboard', [BleScanEventController::class, 'multiAnchorDashboard']);
 });
