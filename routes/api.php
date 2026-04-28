@@ -46,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/space/{space}/rooms', [RoomController::class, 'index']);
     Route::get('/spaces/{space}/rooms/{room}', [RoomController::class, 'show']);
     Route::get('/spaces/{space}/rooms/{room}/ble_anchors', [BLEAnchorController::class, 'roomIndex']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_anchors/health', [BLEAnchorController::class, 'roomHealthIndex']);
     Route::get('/spaces/{space}/rooms/{room}/scan-status', [BLEAnchorController::class, 'latestScanStatus']);
     Route::post('/spaces/{space}/rooms/{room}/scan-control', [BLEAnchorController::class, 'controlRoomScan']);
     Route::post('/space/{space}/room/create', [RoomController::class, 'store']);
