@@ -6,6 +6,7 @@ use App\Models\BleAnchor;
 use App\Models\BleScanEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PhpMqtt\Client\Facades\MQTT;
 
@@ -80,23 +81,23 @@ class MqttListenScannedDevices extends Command
                 );
 
                 $roomId = $anchor?->room_id ?? $this->resolveRoomIdFromMac($mac);
-
-                BleScanEvent::create([
-                    'anchor_id' => $anchor?->id,
-                    'room_id' => $roomId,
-                    'device_mac' => $mac,
-                    'device_name' => $deviceName,
-                    'rssi_dbm' => (int) $rssi,
-                    'scanned_at' => $scannedAt,
-                    'received_at' => now(),
-                    'raw_payload' => [
+                $saved = $this->storeScanEvent(
+                    anchorId: $anchor?->id,
+                    roomId: $roomId,
+                    deviceMac: $mac,
+                    deviceName: $deviceName,
+                    rssiDbm: (int) $rssi,
+                    scannedAt: $scannedAt,
+                    rawPayload: [
                         'topic' => $topic,
                         'payload' => $decoded,
                         'device' => $device,
                     ],
-                ]);
+                );
 
-                $savedCount++;
+                if ($saved) {
+                    $savedCount++;
+                }
             }
 
             $resolvedAnchor = $anchor?->id ?? 'null';
@@ -202,5 +203,42 @@ class MqttListenScannedDevices extends Command
         } catch (\Throwable) {
             return CarbonImmutable::now();
         }
+    }
+
+    private function storeScanEvent(
+        ?int $anchorId,
+        ?int $roomId,
+        string $deviceMac,
+        ?string $deviceName,
+        int $rssiDbm,
+        CarbonImmutable $scannedAt,
+        array $rawPayload,
+    ): bool {
+        $now = now();
+        $attributes = [
+            'anchor_id' => $anchorId,
+            'device_mac' => $deviceMac,
+            'scanned_at' => $scannedAt,
+        ];
+        $values = [
+            'room_id' => $roomId,
+            'device_name' => $deviceName,
+            'rssi_dbm' => $rssiDbm,
+            'received_at' => $now,
+            'raw_payload' => $rawPayload,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+
+        if ($anchorId === null) {
+            $event = BleScanEvent::query()->firstOrCreate($attributes, $values);
+
+            return $event->wasRecentlyCreated;
+        }
+
+        return DB::table('ble_scan_events')->insertOrIgnore([
+            ...$attributes,
+            ...$values,
+        ]) === 1;
     }
 }
