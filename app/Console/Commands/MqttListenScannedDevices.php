@@ -123,8 +123,8 @@ class MqttListenScannedDevices extends Command
                 }
 
                 $scannedAt = $this->resolveScannedAt(
-                    $device['scanned_at'] ?? null,
-                    $decoded['scanned_at'] ?? null
+                    $device['scanned_at'] ?? $device['time'] ?? null,
+                    $decoded['scanned_at'] ?? $decoded['time'] ?? null
                 );
 
                 $roomId = $anchor?->room_id ?? $this->resolveRoomIdFromMac($mac);
@@ -242,7 +242,7 @@ class MqttListenScannedDevices extends Command
             'mac' => $payload['mac'] ?? $payload['device_mac'] ?? null,
             'name' => $payload['name'] ?? $payload['device_name'] ?? null,
             'rssi' => $payload['rssi'] ?? $payload['rssi_dbm'] ?? null,
-            'scanned_at' => $payload['scanned_at'] ?? null,
+            'scanned_at' => $payload['scanned_at'] ?? $payload['time'] ?? null,
         ];
 
         if ($singleDevice['mac'] === null && $singleDevice['rssi'] === null) {
@@ -298,7 +298,7 @@ class MqttListenScannedDevices extends Command
             'device_name' => $deviceName,
             'rssi_dbm' => $rssiDbm,
             'received_at' => $now,
-            'raw_payload' => $rawPayload,
+            'raw_payload' => json_encode($rawPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'created_at' => $now,
             'updated_at' => $now,
         ];
