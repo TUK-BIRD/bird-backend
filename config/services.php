@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'location_estimator' => [
+        'url' => env('LOCATION_ESTIMATOR_URL', 'http://localhost:8000/location/estimate'),
+        'timeout_seconds' => (float) env('LOCATION_ESTIMATOR_TIMEOUT_SECONDS', 5),
+    ],
+
 ];

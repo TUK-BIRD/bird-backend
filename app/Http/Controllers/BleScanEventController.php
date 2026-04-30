@@ -8,6 +8,7 @@ use App\Models\Space;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class BleScanEventController extends Controller
 {
@@ -23,6 +24,7 @@ class BleScanEventController extends Controller
             'since' => 'nullable|date',
             'until' => 'nullable|date',
             'limit' => 'nullable|integer|min:1|max:100',
+            'bucket_minutes' => 'nullable|integer|in:10,30,60',
         ]);
 
         $since = isset($validated['since'])
@@ -38,6 +40,7 @@ class BleScanEventController extends Controller
         }
 
         $limit = isset($validated['limit']) ? (int) $validated['limit'] : 10;
+        $bucketMinutes = isset($validated['bucket_minutes']) ? (int) $validated['bucket_minutes'] : 60;
 
         $currentWindowQuery = $this->buildWindowQuery($room, $since, $until);
 
@@ -48,7 +51,7 @@ class BleScanEventController extends Controller
             ->limit($limit)
             ->get();
 
-        $currentStats = $this->buildDashboardStats($since, $until, clone $currentWindowQuery);
+        $currentStats = $this->buildDashboardStats($since, $until, clone $currentWindowQuery, $bucketMinutes);
         $healthKpis = $this->buildHealthKpis($room);
 
         $previousWeekSince = $since->subWeek();
@@ -56,7 +59,8 @@ class BleScanEventController extends Controller
         $previousWeekStats = $this->buildDashboardStats(
             $previousWeekSince,
             $previousWeekUntil,
-            $this->buildWindowQuery($room, $previousWeekSince, $previousWeekUntil)
+            $this->buildWindowQuery($room, $previousWeekSince, $previousWeekUntil),
+            $bucketMinutes
         );
 
         return response()->json([
@@ -72,6 +76,7 @@ class BleScanEventController extends Controller
                 'since' => $since->toIso8601String(),
                 'until' => $until->toIso8601String(),
                 'limit' => $limit,
+                'bucket_minutes' => $bucketMinutes,
             ],
             'stats' => array_merge($currentStats, [
                 'latest_event_scanned_at' => optional($latestEvents->first()?->scanned_at)->toIso8601String(),
@@ -277,6 +282,249 @@ class BleScanEventController extends Controller
         ]);
     }
 
+    public function anchorSetChart(Request $request, Space $space, Room $room): JsonResponse
+    {
+        abort_unless(
+            $request->user()->spaces()->where('spaces.id', $space->id)->exists(),
+            403
+        );
+        abort_unless($room->space_id === $space->id, 404);
+
+        $validated = $request->validate([
+            'since' => 'nullable|date',
+            'until' => 'nullable|date',
+            'anchor_ids' => 'required|array|min:2',
+            'anchor_ids.*' => 'integer',
+            'exclude_device_macs' => 'nullable|array',
+            'exclude_device_macs.*' => 'string',
+        ]);
+
+        $since = isset($validated['since'])
+            ? CarbonImmutable::parse($validated['since'])
+            : CarbonImmutable::now()->subHour();
+
+        $until = isset($validated['until'])
+            ? CarbonImmutable::parse($validated['until'])
+            : CarbonImmutable::now();
+
+        if ($since->gt($until)) {
+            [$since, $until] = [$until, $since];
+        }
+
+        $anchorIds = collect($validated['anchor_ids'])
+            ->map(fn (mixed $value) => (int) $value)
+            ->unique()
+            ->values()
+            ->all();
+
+        $excludedMacs = collect($validated['exclude_device_macs'] ?? [])
+            ->map(fn (mixed $value) => strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $events = $room->bleScanEvents()
+            ->whereIn('anchor_id', $anchorIds)
+            ->where('scanned_at', '>=', $since)
+            ->where('scanned_at', '<=', $until)
+            ->when(
+                ! empty($excludedMacs),
+                fn ($query) => $query->whereNotIn('device_mac', $excludedMacs)
+            )
+            ->orderBy('scanned_at')
+            ->get(['anchor_id', 'device_mac', 'scanned_at', 'rssi_dbm']);
+
+        $matchedGroups = $events
+            ->filter(fn ($event) => $event->scanned_at !== null)
+            ->filter(fn ($event) => $event->device_mac !== null && trim((string) $event->device_mac) !== '')
+            ->groupBy(function ($event) {
+                $bucket = CarbonImmutable::parse($event->scanned_at)
+                    ->setMinute(0)
+                    ->setSecond(0)
+                    ->setMicrosecond(0)
+                    ->toIso8601String();
+
+                return $bucket.'|'.strtolower((string) $event->device_mac);
+            })
+            ->filter(function ($group) use ($anchorIds) {
+                return $group->pluck('anchor_id')
+                    ->map(fn (mixed $value) => (int) $value)
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all() === collect($anchorIds)->sort()->values()->all();
+            });
+
+        $timeSeries = $matchedGroups
+            ->groupBy(function ($group, $compositeKey) {
+                return explode('|', (string) $compositeKey, 2)[0];
+            })
+            ->map(function ($groups, $bucket) {
+                $matchedDevices = $groups->map(function ($group) {
+                    $deviceMac = strtolower((string) $group->first()?->device_mac);
+
+                    return [
+                        'device_mac' => $deviceMac,
+                        'scan_count' => $group->count(),
+                        'average_rssi' => round((float) $group->avg('rssi_dbm'), 1),
+                        'first_scanned_at' => optional($group->min('scanned_at'))->toIso8601String(),
+                        'last_scanned_at' => optional($group->max('scanned_at'))->toIso8601String(),
+                    ];
+                })->values();
+
+                return [
+                    'bucket' => $bucket,
+                    'event_count' => $matchedDevices->count(),
+                    'unique_device_count' => $matchedDevices->count(),
+                    'matched_devices' => $matchedDevices,
+                ];
+            })
+            ->sortBy('bucket')
+            ->values();
+
+        return response()->json([
+            'space' => [
+                'id' => $space->id,
+                'name' => $space->name,
+            ],
+            'room' => [
+                'id' => $room->id,
+                'name' => $room->name,
+            ],
+            'timespan' => [
+                'since' => $since->toIso8601String(),
+                'until' => $until->toIso8601String(),
+            ],
+            'filters' => [
+                'anchor_ids' => $anchorIds,
+                'exclude_device_macs' => $excludedMacs,
+            ],
+            'stats' => [
+                'matched_bucket_count' => $timeSeries->count(),
+                'matched_device_count' => $matchedGroups->count(),
+                'time_series' => $timeSeries,
+            ],
+        ]);
+    }
+
+    public function locationEstimates(Request $request, Space $space, Room $room): JsonResponse
+    {
+        abort_unless(
+            $request->user()->spaces()->where('spaces.id', $space->id)->exists(),
+            403
+        );
+        abort_unless($room->space_id === $space->id, 404);
+
+        $validated = $request->validate([
+            'since' => 'nullable|date',
+            'until' => 'nullable|date',
+            'window_minutes' => 'nullable|integer|min:1|max:30',
+            'minimum_anchor_matches' => 'nullable|integer|min:3|max:20',
+        ]);
+
+        $until = isset($validated['until'])
+            ? CarbonImmutable::parse($validated['until'])
+            : CarbonImmutable::now();
+
+        $windowMinutes = isset($validated['window_minutes']) ? (int) $validated['window_minutes'] : 5;
+        $minimumAnchorMatches = isset($validated['minimum_anchor_matches']) ? (int) $validated['minimum_anchor_matches'] : 3;
+
+        $since = isset($validated['since'])
+            ? CarbonImmutable::parse($validated['since'])
+            : $until->subMinutes($windowMinutes);
+
+        if ($since->gt($until)) {
+            [$since, $until] = [$until, $since];
+        }
+
+        $generatedRadiomap = $room->generatedRadiomap;
+
+        $installedAnchorIds = $room->bleAnchors()
+            ->whereNotNull('installed_at')
+            ->pluck('id')
+            ->map(fn (mixed $value) => (int) $value)
+            ->values()
+            ->all();
+
+        $events = $room->bleScanEvents()
+            ->whereIn('anchor_id', $installedAnchorIds)
+            ->where('scanned_at', '>=', $since)
+            ->where('scanned_at', '<=', $until)
+            ->whereNotNull('anchor_id')
+            ->whereNotNull('device_mac')
+            ->orderBy('device_mac')
+            ->orderBy('anchor_id')
+            ->orderBy('scanned_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->get(['id', 'anchor_id', 'device_mac', 'device_name', 'rssi_dbm', 'scanned_at']);
+
+        $devices = $events
+            ->groupBy(fn ($event) => strtolower(trim((string) $event->device_mac)))
+            ->map(function ($deviceEvents, $deviceMac) use ($room, $minimumAnchorMatches) {
+                $signals = $deviceEvents
+                    ->groupBy('anchor_id')
+                    ->map(fn ($anchorEvents) => (int) $anchorEvents->first()->rssi_dbm)
+                    ->sortKeys();
+
+                if ($signals->count() < $minimumAnchorMatches) {
+                    return null;
+                }
+
+                $payload = [
+                    'room_id' => (string) $room->id,
+                    'signals' => $signals
+                        ->mapWithKeys(fn ($rssi, $anchorId) => [(string) $anchorId => $rssi])
+                        ->all(),
+                ];
+
+                $response = Http::timeout((float) config('services.location_estimator.timeout_seconds', 5))
+                    ->post((string) config('services.location_estimator.url'), $payload);
+
+                $response->throw();
+
+                return [
+                    'device_mac' => $deviceMac,
+                    'device_name' => $deviceEvents->first()?->device_name,
+                    'matched_anchors' => $signals->count(),
+                    'signals' => $payload['signals'],
+                    'latest_scanned_at' => optional($deviceEvents->first()?->scanned_at)->toIso8601String(),
+                    'estimate' => $response->json(),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        return response()->json([
+            'space' => [
+                'id' => $space->id,
+                'name' => $space->name,
+            ],
+            'room' => [
+                'id' => $room->id,
+                'name' => $room->name,
+            ],
+            'generated_radiomap' => $generatedRadiomap ? [
+                'x_range_min' => $generatedRadiomap->x_range_min,
+                'x_range_max' => $generatedRadiomap->x_range_max,
+                'y_range_min' => $generatedRadiomap->y_range_min,
+                'y_range_max' => $generatedRadiomap->y_range_max,
+                'grid_step' => $generatedRadiomap->grid_step,
+            ] : null,
+            'timespan' => [
+                'since' => $since->toIso8601String(),
+                'until' => $until->toIso8601String(),
+                'window_minutes' => $windowMinutes,
+                'minimum_anchor_matches' => $minimumAnchorMatches,
+            ],
+            'stats' => [
+                'installed_anchor_count' => count($installedAnchorIds),
+                'estimated_device_count' => $devices->count(),
+            ],
+            'devices' => $devices,
+        ]);
+    }
+
     private function buildWindowQuery(Room $room, CarbonImmutable $since, CarbonImmutable $until)
     {
         return $room->bleScanEvents()
@@ -284,7 +532,12 @@ class BleScanEventController extends Controller
             ->where('scanned_at', '<=', $until);
     }
 
-    private function buildDashboardStats(CarbonImmutable $since, CarbonImmutable $until, $windowQuery): array
+    private function buildDashboardStats(
+        CarbonImmutable $since,
+        CarbonImmutable $until,
+        $windowQuery,
+        int $bucketMinutes = 60
+    ): array
     {
         $totalEvents = (clone $windowQuery)->count();
         $uniqueDevices = (clone $windowQuery)->distinct('device_mac')->count('device_mac');
@@ -316,17 +569,25 @@ class BleScanEventController extends Controller
             ];
         })->values();
 
-        $timeSeries = (clone $windowQuery)
+        $timeSeriesEvents = (clone $windowQuery)
             ->orderBy('scanned_at')
-            ->get(['scanned_at', 'rssi_dbm', 'device_mac'])
-            ->filter(fn ($event) => $event->scanned_at !== null)
-            ->groupBy(function ($event) {
-                $slot = CarbonImmutable::parse($event->scanned_at)
-                    ->setMinute(0)
-                    ->setSecond(0)
-                    ->setMicrosecond(0);
+            ->get(['scanned_at', 'rssi_dbm', 'device_mac']);
 
-                return $slot->toIso8601String();
+        $qualifiedDeviceMacs = $timeSeriesEvents
+            ->filter(fn ($event) => $event->device_mac !== null && trim((string) $event->device_mac) !== '')
+            ->countBy('device_mac')
+            ->filter(fn (int $count) => $count >= 2)
+            ->keys()
+            ->all();
+
+        $timeSeries = $timeSeriesEvents
+            ->filter(fn ($event) => in_array($event->device_mac, $qualifiedDeviceMacs, true))
+            ->filter(fn ($event) => $event->scanned_at !== null)
+            ->groupBy(function ($event) use ($bucketMinutes) {
+                return $this->resolveBucketStart(
+                    CarbonImmutable::parse($event->scanned_at),
+                    $bucketMinutes
+                )->toIso8601String();
             })
             ->map(function ($group, $bucket) {
                 $uniqueDevices = $group->pluck('device_mac')->filter()->values()->unique();
@@ -347,6 +608,7 @@ class BleScanEventController extends Controller
             'average_rssi' => $averageRssi !== null ? round((float) $averageRssi, 1) : null,
             'anchor_breakdown' => $anchorStats,
             'time_series' => $timeSeries,
+            'bucket_minutes' => $bucketMinutes,
             'window_minutes' => $until->diffInMinutes($since),
         ];
     }
@@ -395,5 +657,19 @@ class BleScanEventController extends Controller
         }
 
         return round(($numerator / $denominator) * 100, 1);
+    }
+
+    private function resolveBucketStart(CarbonImmutable $timestamp, int $bucketMinutes): CarbonImmutable
+    {
+        $normalizedBucketMinutes = in_array($bucketMinutes, [10, 30, 60], true)
+            ? $bucketMinutes
+            : 60;
+
+        $minute = (int) floor($timestamp->minute / $normalizedBucketMinutes) * $normalizedBucketMinutes;
+
+        return $timestamp
+            ->setMinute($minute)
+            ->setSecond(0)
+            ->setMicrosecond(0);
     }
 }
