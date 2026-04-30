@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\BleAnchor;
+use App\Models\BleScanBlacklistedMac;
 use App\Models\BleScanEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -37,6 +38,9 @@ class MqttListenScannedDevices extends Command
 
         $this->info("Listening MQTT topic: {$topic}");
         $this->line('Press Ctrl+C to stop.');
+        Log::info('MQTT anchor scan listener started.', [
+            'topic' => $topic,
+        ]);
 
         $mqtt->subscribe($topic, function (string $topic, string $message): void {
             $decoded = json_decode($message, true);
@@ -58,15 +62,58 @@ class MqttListenScannedDevices extends Command
             $devices = $this->extractDevices($decoded);
             $deviceCount = count($devices);
             $savedCount = 0;
+            $skipped = [];
+
+            if ($deviceCount === 0) {
+                Log::info('MQTT anchor scan payload contained no storable devices.', [
+                    'topic' => $topic,
+                    'anchor_id' => $anchorId,
+                    'payload' => $decoded,
+                ]);
+            }
 
             foreach ($devices as $device) {
                 $mac = $this->normalizeMac((string) ($device['mac'] ?? $device['device_mac'] ?? ''));
                 if ($mac === null) {
+                    $skipped[] = [
+                        'reason' => 'invalid_mac',
+                        'device' => $device,
+                    ];
+                    Log::warning('MQTT anchor scan payload skipped for invalid MAC.', [
+                        'topic' => $topic,
+                        'anchor_id' => $anchorId,
+                        'device' => $device,
+                    ]);
+
+                    continue;
+                }
+
+                if ($this->isBlacklistedMac($mac)) {
+                    $skipped[] = [
+                        'reason' => 'blacklisted_mac',
+                        'device_mac' => $mac,
+                    ];
+                    Log::info('MQTT anchor scan payload skipped for blacklisted MAC.', [
+                        'topic' => $topic,
+                        'device_mac' => $mac,
+                    ]);
+
                     continue;
                 }
 
                 $rssi = $device['rssi'] ?? $device['rssi_dbm'] ?? null;
                 if (! is_numeric($rssi)) {
+                    $skipped[] = [
+                        'reason' => 'invalid_rssi',
+                        'device_mac' => $mac,
+                        'device' => $device,
+                    ];
+                    Log::warning('MQTT anchor scan payload skipped for invalid RSSI.', [
+                        'topic' => $topic,
+                        'device_mac' => $mac,
+                        'device' => $device,
+                    ]);
+
                     continue;
                 }
 
@@ -81,7 +128,7 @@ class MqttListenScannedDevices extends Command
                 );
 
                 $roomId = $anchor?->room_id ?? $this->resolveRoomIdFromMac($mac);
-                $saved = $this->storeScanEvent(
+                $storeResult = $this->storeScanEvent(
                     anchorId: $anchor?->id,
                     roomId: $roomId,
                     deviceMac: $mac,
@@ -95,8 +142,33 @@ class MqttListenScannedDevices extends Command
                     ],
                 );
 
-                if ($saved) {
+                if ($storeResult['saved']) {
                     $savedCount++;
+
+                    Log::info('MQTT anchor scan event stored.', [
+                        'topic' => $topic,
+                        'anchor_id' => $anchorId,
+                        'resolved_anchor_id' => $anchor?->id,
+                        'resolved_room_id' => $roomId,
+                        'device_mac' => $mac,
+                        'scanned_at' => $scannedAt->toIso8601String(),
+                    ]);
+                } else {
+                    $skipped[] = [
+                        'reason' => $storeResult['reason'],
+                        'device_mac' => $mac,
+                        'scanned_at' => $scannedAt->toIso8601String(),
+                    ];
+
+                    Log::info('MQTT anchor scan event skipped.', [
+                        'topic' => $topic,
+                        'anchor_id' => $anchorId,
+                        'resolved_anchor_id' => $anchor?->id,
+                        'resolved_room_id' => $roomId,
+                        'device_mac' => $mac,
+                        'scanned_at' => $scannedAt->toIso8601String(),
+                        'reason' => $storeResult['reason'],
+                    ]);
                 }
             }
 
@@ -114,6 +186,7 @@ class MqttListenScannedDevices extends Command
                 'resolved_room_id' => $anchor?->room_id,
                 'device_count' => $deviceCount,
                 'saved_count' => $savedCount,
+                'skipped' => $skipped,
                 'payload' => $decoded,
             ]);
         }, 0);
@@ -213,7 +286,7 @@ class MqttListenScannedDevices extends Command
         int $rssiDbm,
         CarbonImmutable $scannedAt,
         array $rawPayload,
-    ): bool {
+    ): array {
         $now = now();
         $attributes = [
             'anchor_id' => $anchorId,
@@ -233,12 +306,27 @@ class MqttListenScannedDevices extends Command
         if ($anchorId === null) {
             $event = BleScanEvent::query()->firstOrCreate($attributes, $values);
 
-            return $event->wasRecentlyCreated;
+            return [
+                'saved' => $event->wasRecentlyCreated,
+                'reason' => $event->wasRecentlyCreated ? 'stored' : 'duplicate_event',
+            ];
         }
 
-        return DB::table('ble_scan_events')->insertOrIgnore([
+        $inserted = DB::table('ble_scan_events')->insertOrIgnore([
             ...$attributes,
             ...$values,
         ]) === 1;
+
+        return [
+            'saved' => $inserted,
+            'reason' => $inserted ? 'stored' : 'duplicate_event',
+        ];
+    }
+
+    private function isBlacklistedMac(string $deviceMac): bool
+    {
+        return BleScanBlacklistedMac::query()
+            ->where('device_mac', strtolower($deviceMac))
+            ->exists();
     }
 }
