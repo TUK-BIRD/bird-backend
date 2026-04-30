@@ -122,10 +122,7 @@ class MqttListenScannedDevices extends Command
                     $deviceName = null;
                 }
 
-                $scannedAt = $this->resolveScannedAt(
-                    $device['scanned_at'] ?? $device['time'] ?? null,
-                    $decoded['scanned_at'] ?? $decoded['time'] ?? null
-                );
+                $scannedAt = $this->resolveScannedAt();
 
                 $roomId = $anchor?->room_id ?? $this->resolveRoomIdFromMac($mac);
                 $storeResult = $this->storeScanEvent(
@@ -264,18 +261,9 @@ class MqttListenScannedDevices extends Command
             : null;
     }
 
-    private function resolveScannedAt(mixed $deviceScannedAt, mixed $payloadScannedAt): CarbonImmutable
+    private function resolveScannedAt(): CarbonImmutable
     {
-        $candidate = $deviceScannedAt ?? $payloadScannedAt;
-        if (! is_string($candidate) || trim($candidate) === '') {
-            return CarbonImmutable::now();
-        }
-
-        try {
-            return CarbonImmutable::parse($candidate);
-        } catch (\Throwable) {
-            return CarbonImmutable::now();
-        }
+        return CarbonImmutable::now();
     }
 
     private function storeScanEvent(

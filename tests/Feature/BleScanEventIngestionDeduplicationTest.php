@@ -62,14 +62,13 @@ it('stores scan events from mqtt payload data with json raw payloads', function 
 
     $command = app(\App\Console\Commands\MqttListenScannedDevices::class);
     $reflection = new \ReflectionClass($command);
+    $now = CarbonImmutable::parse('2026-04-30T21:10:00+09:00');
+
+    CarbonImmutable::setTestNow($now);
 
     $resolveScannedAt = $reflection->getMethod('resolveScannedAt');
     $resolveScannedAt->setAccessible(true);
-    $scannedAt = $resolveScannedAt->invoke(
-        $command,
-        '1970-01-01 00:06:21.679',
-        null,
-    );
+    $scannedAt = $resolveScannedAt->invoke($command);
 
     $storeScanEvent = $reflection->getMethod('storeScanEvent');
     $storeScanEvent->setAccessible(true);
@@ -100,5 +99,8 @@ it('stores scan events from mqtt payload data with json raw payloads', function 
     expect($event->device_mac)->toBe('72:bf:3b:8e:89:b6')
         ->and($event->raw_payload)->toBeArray()
         ->and(data_get($event->raw_payload, 'payload.time'))->toBe('1970-01-01 00:06:21.679')
-        ->and($event->scanned_at?->format('Y-m-d H:i:s'))->toStartWith('1970-01-01 00:06:21');
+        ->and($event->scanned_at?->toIso8601String())->toBe($now->toIso8601String())
+        ->and($event->received_at?->toIso8601String())->toBe($now->toIso8601String());
+
+    CarbonImmutable::setTestNow();
 });
