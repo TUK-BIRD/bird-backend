@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BLEAnchorController;
+use App\Http\Controllers\BleScanBlacklistController;
 use App\Http\Controllers\BleScanEventController;
 use App\Http\Controllers\RadiomapController;
 use App\Http\Controllers\ReferencePointController;
@@ -30,6 +31,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ble_anchors', [BLEAnchorController::class, 'index']);
     Route::post('/ble_anchors', [BLEAnchorController::class, 'store']);
     Route::delete('/ble_anchors/{anchor}', [BLEAnchorController::class, 'destroy']);
+    Route::get('/ble_scan_blacklisted_macs', [BleScanBlacklistController::class, 'index']);
+    Route::post('/ble_scan_blacklisted_macs', [BleScanBlacklistController::class, 'store']);
+    Route::delete('/ble_scan_blacklisted_macs/{blacklistedMac}', [BleScanBlacklistController::class, 'destroy']);
 
     // Reference Point 라우트
     Route::get('/reference_points', [ReferencePointController::class, 'index']);
@@ -59,4 +63,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/spaces/invite/accept', [SpaceInvitationController::class, 'accept']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/dashboard', [BleScanEventController::class, 'dashboard']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/multi-anchor-dashboard', [BleScanEventController::class, 'multiAnchorDashboard']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/anchor-set-chart', [BleScanEventController::class, 'anchorSetChart']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/location-estimates', [BleScanEventController::class, 'locationEstimates']);
 });
