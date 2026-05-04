@@ -3,6 +3,7 @@
 use App\Enums\UserSpaceRole;
 use App\Models\BleAnchor;
 use App\Models\BleScanEvent;
+use App\Models\LocationEstimate;
 use App\Models\Space;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -456,7 +457,92 @@ it('returns hourly chart data for devices seen by all requested anchors excludin
     $response->assertJsonPath('stats.timeSeries.1.matchedDevices.0.deviceMac', 'ee:ee:ee:ee:ee:01');
 });
 
-it('returns location estimates for devices seen by at least 3 installed anchors in the last 5 minutes', function () {
+it('supports 10-minute, 30-minute, and 60-minute buckets for anchor set chart data', function () {
+    $space = Space::create(['name' => 'Bird Space']);
+    $user = User::factory()->create();
+
+    $space->users()->attach($user->id, [
+        'role' => UserSpaceRole::OWNER->value,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $room = $space->rooms()->create(['name' => 'Room 1']);
+
+    $anchor51 = BleAnchor::factory()->create([
+        'room_id' => $room->id,
+        'installed_at' => now(),
+    ]);
+    $anchor52 = BleAnchor::factory()->create([
+        'room_id' => $room->id,
+        'installed_at' => now(),
+    ]);
+
+    $events = [
+        ['anchor' => $anchor51, 'device_mac' => 'aa:aa:aa:aa:aa:01', 'rssi_dbm' => -50, 'scanned_at' => '2026-04-29T08:05:00+00:00'],
+        ['anchor' => $anchor52, 'device_mac' => 'aa:aa:aa:aa:aa:01', 'rssi_dbm' => -54, 'scanned_at' => '2026-04-29T08:08:00+00:00'],
+        ['anchor' => $anchor51, 'device_mac' => 'bb:bb:bb:bb:bb:01', 'rssi_dbm' => -60, 'scanned_at' => '2026-04-29T08:22:00+00:00'],
+        ['anchor' => $anchor52, 'device_mac' => 'bb:bb:bb:bb:bb:01', 'rssi_dbm' => -64, 'scanned_at' => '2026-04-29T08:28:00+00:00'],
+    ];
+
+    foreach ($events as $event) {
+        BleScanEvent::create([
+            'anchor_id' => $event['anchor']->id,
+            'room_id' => $room->id,
+            'device_mac' => $event['device_mac'],
+            'device_name' => null,
+            'rssi_dbm' => $event['rssi_dbm'],
+            'scanned_at' => CarbonImmutable::parse($event['scanned_at']),
+            'received_at' => CarbonImmutable::parse($event['scanned_at'])->addSeconds(2),
+            'raw_payload' => ['test' => true],
+        ]);
+    }
+
+    Sanctum::actingAs($user);
+
+    $baseQuery = [
+        'since' => '2026-04-29T08:00:00+00:00',
+        'until' => '2026-04-29T08:30:00+00:00',
+        'anchor_ids' => [$anchor51->id, $anchor52->id],
+    ];
+
+    $query10 = http_build_query($baseQuery + ['bucket_minutes' => 10]);
+
+    $response10 = $this->getJson("/api/spaces/{$space->id}/rooms/{$room->id}/ble_scan_events/anchor-set-chart?{$query10}");
+
+    $response10->assertOk();
+    $response10->assertJsonPath('timespan.bucketMinutes', 10);
+    $response10->assertJsonPath('stats.bucketMinutes', 10);
+    $response10->assertJsonCount(2, 'stats.timeSeries');
+    $response10->assertJsonPath('stats.timeSeries.0.bucket', '2026-04-29T08:00:00+09:00');
+    $response10->assertJsonPath('stats.timeSeries.0.eventCount', 1);
+    $response10->assertJsonPath('stats.timeSeries.1.bucket', '2026-04-29T08:20:00+09:00');
+    $response10->assertJsonPath('stats.timeSeries.1.eventCount', 1);
+
+    $query30 = http_build_query($baseQuery + ['bucket_minutes' => 30]);
+
+    $response30 = $this->getJson("/api/spaces/{$space->id}/rooms/{$room->id}/ble_scan_events/anchor-set-chart?{$query30}");
+
+    $response30->assertOk();
+    $response30->assertJsonPath('timespan.bucketMinutes', 30);
+    $response30->assertJsonPath('stats.bucketMinutes', 30);
+    $response30->assertJsonCount(1, 'stats.timeSeries');
+    $response30->assertJsonPath('stats.timeSeries.0.bucket', '2026-04-29T08:00:00+09:00');
+    $response30->assertJsonPath('stats.timeSeries.0.eventCount', 2);
+
+    $query60 = http_build_query($baseQuery + ['bucket_minutes' => 60]);
+
+    $response60 = $this->getJson("/api/spaces/{$space->id}/rooms/{$room->id}/ble_scan_events/anchor-set-chart?{$query60}");
+
+    $response60->assertOk();
+    $response60->assertJsonPath('timespan.bucketMinutes', 60);
+    $response60->assertJsonPath('stats.bucketMinutes', 60);
+    $response60->assertJsonCount(1, 'stats.timeSeries');
+    $response60->assertJsonPath('stats.timeSeries.0.bucket', '2026-04-29T08:00:00+09:00');
+    $response60->assertJsonPath('stats.timeSeries.0.eventCount', 2);
+});
+
+it('returns location estimates for devices seen by at least 2 installed anchors in the last 5 minutes', function () {
     $space = Space::create(['name' => 'Bird Space']);
     $user = User::factory()->create();
 
@@ -506,6 +592,16 @@ it('returns location estimates for devices seen by at least 3 installed anchors 
         'raw_payload' => ['test' => true],
     ]);
     BleScanEvent::create([
+        'anchor_id' => $anchor51->id,
+        'room_id' => $room->id,
+        'device_mac' => 'aa:aa:aa:aa:aa:01',
+        'device_name' => 'Tracked Device',
+        'rssi_dbm' => -95,
+        'scanned_at' => $baseTime->subMinutes(3)->subSeconds(30),
+        'received_at' => $baseTime->subMinutes(3)->subSeconds(29),
+        'raw_payload' => ['test' => true],
+    ]);
+    BleScanEvent::create([
         'anchor_id' => $anchor52->id,
         'room_id' => $room->id,
         'device_mac' => 'aa:aa:aa:aa:aa:01',
@@ -516,6 +612,16 @@ it('returns location estimates for devices seen by at least 3 installed anchors 
         'raw_payload' => ['test' => true],
     ]);
     BleScanEvent::create([
+        'anchor_id' => $anchor52->id,
+        'room_id' => $room->id,
+        'device_mac' => 'aa:aa:aa:aa:aa:01',
+        'device_name' => 'Tracked Device',
+        'rssi_dbm' => -90,
+        'scanned_at' => $baseTime->subMinutes(2)->subSeconds(30),
+        'received_at' => $baseTime->subMinutes(2)->subSeconds(29),
+        'raw_payload' => ['test' => true],
+    ]);
+    BleScanEvent::create([
         'anchor_id' => $anchor53->id,
         'room_id' => $room->id,
         'device_mac' => 'aa:aa:aa:aa:aa:01',
@@ -523,6 +629,16 @@ it('returns location estimates for devices seen by at least 3 installed anchors 
         'rssi_dbm' => -90,
         'scanned_at' => $baseTime->subMinutes(2),
         'received_at' => $baseTime->subMinutes(2)->addSeconds(1),
+        'raw_payload' => ['test' => true],
+    ]);
+    BleScanEvent::create([
+        'anchor_id' => $anchor53->id,
+        'room_id' => $room->id,
+        'device_mac' => 'aa:aa:aa:aa:aa:01',
+        'device_name' => 'Tracked Device',
+        'rssi_dbm' => -91,
+        'scanned_at' => $baseTime->subMinute(),
+        'received_at' => $baseTime->subMinute()->addSecond(),
         'raw_payload' => ['test' => true],
     ]);
 
@@ -548,13 +664,13 @@ it('returns location estimates for devices seen by at least 3 installed anchors 
     ]);
 
     Http::fake([
-        'http://localhost:8000/location/estimate' => Http::response([
+        'http://localhost:8000/location/estimate' => fn ($request) => Http::response([
             'x' => 0.097,
             'y' => 0.1,
             'confidence' => 0.4259,
             'is_outside' => false,
             'min_distance' => 8.6113,
-            'matched_anchors' => 3,
+            'matched_anchors' => count($request['signals']),
         ], 200),
     ]);
 
@@ -569,27 +685,124 @@ it('returns location estimates for devices seen by at least 3 installed anchors 
 
     $response->assertOk();
     $response->assertJsonPath('stats.installedAnchorCount', 3);
-    $response->assertJsonPath('stats.estimatedDeviceCount', 1);
+    $response->assertJsonPath('stats.estimatedDeviceCount', 2);
     $response->assertJsonPath('generatedRadiomap.xRangeMax', 9.5);
     $response->assertJsonPath('generatedRadiomap.yRangeMax', 7.2);
     $response->assertJsonPath('generatedRadiomap.xRangeMin', 0);
     $response->assertJsonPath('generatedRadiomap.yRangeMin', 0);
-    $response->assertJsonCount(1, 'devices');
+    $response->assertJsonCount(2, 'devices');
     $response->assertJsonPath('devices.0.deviceMac', 'aa:aa:aa:aa:aa:01');
     $response->assertJsonPath('devices.0.matchedAnchors', 3);
-    $response->assertJsonPath('devices.0.signals.'.$anchor51->id, -97);
-    $response->assertJsonPath('devices.0.signals.'.$anchor52->id, -93);
-    $response->assertJsonPath('devices.0.signals.'.$anchor53->id, -90);
+    $response->assertJsonPath('devices.0.signals.'.$anchor51->id, -96);
+    $response->assertJsonPath('devices.0.signals.'.$anchor52->id, -91.5);
+    $response->assertJsonPath('devices.0.signals.'.$anchor53->id, -90.5);
     $response->assertJsonPath('devices.0.estimate.x', 0.097);
     $response->assertJsonPath('devices.0.estimate.matchedAnchors', 3);
+    $response->assertJsonPath('devices.1.deviceMac', 'bb:bb:bb:bb:bb:01');
+    $response->assertJsonPath('devices.1.matchedAnchors', 2);
+    $response->assertJsonPath('devices.1.signals.'.$anchor51->id, -80);
+    $response->assertJsonPath('devices.1.signals.'.$anchor52->id, -82);
+    $response->assertJsonPath('devices.1.signals.'.$anchor53->id, null);
+    $response->assertJsonPath('devices.1.estimate.matchedAnchors', 2);
+
+    Http::assertSentCount(2);
 
     Http::assertSent(function ($request) use ($room, $anchor51, $anchor52, $anchor53) {
         return $request->url() === 'http://localhost:8000/location/estimate'
             && $request['room_id'] === (string) $room->id
-            && $request['signals'][(string) $anchor51->id] === -97
-            && $request['signals'][(string) $anchor52->id] === -93
-            && $request['signals'][(string) $anchor53->id] === -90;
+            && $request['signals'][(string) $anchor51->id] === -96.0
+            && $request['signals'][(string) $anchor52->id] === -91.5
+            && $request['signals'][(string) $anchor53->id] === -90.5;
     });
+
+    Http::assertSent(function ($request) use ($room, $anchor51, $anchor52, $anchor53) {
+        return $request->url() === 'http://localhost:8000/location/estimate'
+            && $request['room_id'] === (string) $room->id
+            && $request['signals'][(string) $anchor51->id] === -80.0
+            && $request['signals'][(string) $anchor52->id] === -82.0
+            && ! isset($request['signals'][(string) $anchor53->id]);
+    });
+});
+
+it('stores generated location estimates from the scheduled command', function () {
+    $space = Space::create(['name' => 'Bird Space']);
+    $room = $space->rooms()->create(['name' => 'Room 1']);
+
+    $anchor51 = BleAnchor::factory()->create([
+        'room_id' => $room->id,
+        'installed_at' => now(),
+    ]);
+    $anchor52 = BleAnchor::factory()->create([
+        'room_id' => $room->id,
+        'installed_at' => now(),
+    ]);
+
+    $baseTime = CarbonImmutable::parse('2026-04-30T12:00:00+09:00');
+
+    BleScanEvent::create([
+        'anchor_id' => $anchor51->id,
+        'room_id' => $room->id,
+        'device_mac' => 'aa:aa:aa:aa:aa:01',
+        'device_name' => 'Tracked Device',
+        'rssi_dbm' => -80,
+        'scanned_at' => $baseTime->subMinutes(4),
+        'received_at' => $baseTime->subMinutes(4)->addSecond(),
+        'raw_payload' => ['test' => true],
+    ]);
+    BleScanEvent::create([
+        'anchor_id' => $anchor51->id,
+        'room_id' => $room->id,
+        'device_mac' => 'aa:aa:aa:aa:aa:01',
+        'device_name' => 'Tracked Device',
+        'rssi_dbm' => -82,
+        'scanned_at' => $baseTime->subMinutes(3),
+        'received_at' => $baseTime->subMinutes(3)->addSecond(),
+        'raw_payload' => ['test' => true],
+    ]);
+    BleScanEvent::create([
+        'anchor_id' => $anchor52->id,
+        'room_id' => $room->id,
+        'device_mac' => 'aa:aa:aa:aa:aa:01',
+        'device_name' => 'Tracked Device',
+        'rssi_dbm' => -90,
+        'scanned_at' => $baseTime->subMinutes(2),
+        'received_at' => $baseTime->subMinutes(2)->addSecond(),
+        'raw_payload' => ['test' => true],
+    ]);
+
+    Http::fake([
+        'http://localhost:8000/location/estimate' => Http::response([
+            'x' => 1.2,
+            'y' => 3.4,
+            'confidence' => 0.75,
+            'is_outside' => false,
+            'min_distance' => 2.5,
+            'matched_anchors' => 2,
+        ], 200),
+    ]);
+
+    $this->artisan('location-estimates:generate', [
+        '--room-id' => $room->id,
+        '--window-minutes' => 5,
+        '--until' => $baseTime->toIso8601String(),
+    ])->assertExitCode(0);
+
+    Http::assertSentCount(1);
+    $this->assertDatabaseCount('location_estimates', 1);
+
+    $estimate = LocationEstimate::firstOrFail();
+
+    expect($estimate->space_id)->toBe($space->id)
+        ->and($estimate->room_id)->toBe($room->id)
+        ->and($estimate->device_mac)->toBe('aa:aa:aa:aa:aa:01')
+        ->and($estimate->matched_anchor_count)->toBe(2)
+        ->and($estimate->signals[(string) $anchor51->id])->toBe(-81)
+        ->and($estimate->signals[(string) $anchor52->id])->toBe(-90)
+        ->and($estimate->x)->toBe(1.2)
+        ->and($estimate->y)->toBe(3.4)
+        ->and($estimate->confidence)->toBe(0.75)
+        ->and($estimate->is_outside)->toBeFalse()
+        ->and($estimate->min_distance)->toBe(2.5);
 });
 
 it('forbids access when the user is not part of the space', function () {
