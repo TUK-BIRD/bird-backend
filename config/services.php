@@ -38,6 +38,9 @@ return [
     'location_estimator' => [
         'url' => env('LOCATION_ESTIMATOR_URL', 'http://localhost:8000/location/estimate'),
         'timeout_seconds' => (float) env('LOCATION_ESTIMATOR_TIMEOUT_SECONDS', 5),
+        'schedule_cron' => env('LOCATION_ESTIMATOR_SCHEDULE_CRON', '*/5 * * * *'),
+        'window_minutes' => (int) env('LOCATION_ESTIMATOR_WINDOW_MINUTES', 5),
+        'minimum_anchor_matches' => (int) env('LOCATION_ESTIMATOR_MINIMUM_ANCHOR_MATCHES', 2),
     ],
 
 ];
