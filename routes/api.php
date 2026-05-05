@@ -61,8 +61,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/spaces/{space}/invites', [SpaceInvitationController::class, 'index']);
     Route::post('/spaces/{space}/invite', [SpaceInvitationController::class, 'store']);
     Route::post('/spaces/invite/accept', [SpaceInvitationController::class, 'accept']);
+    Route::get('/spaces/{space}/rooms/{room}/overview-dashboard', [BleScanEventController::class, 'overviewDashboard']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/dashboard', [BleScanEventController::class, 'dashboard']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/multi-anchor-dashboard', [BleScanEventController::class, 'multiAnchorDashboard']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/anchor-set-chart', [BleScanEventController::class, 'anchorSetChart']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/location-estimates', [BleScanEventController::class, 'locationEstimates']);
+    Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/location-estimates/heatmap', [BleScanEventController::class, 'locationEstimateHeatmap']);
 });
