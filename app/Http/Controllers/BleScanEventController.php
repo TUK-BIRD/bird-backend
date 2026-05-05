@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\BleAnchor;
+use App\Models\BleScanBlacklistedMac;
+use App\Models\LocationEstimate;
 use App\Models\Room;
 use App\Models\Space;
-use App\Services\LocationEstimateService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -153,6 +154,10 @@ class BleScanEventController extends Controller
             ->where('scanned_at', '>=', $since)
             ->where('scanned_at', '<=', $until)
             ->whereNotNull('anchor_id')
+            ->when(
+                ! empty($this->blacklistedDeviceMacs()),
+                fn ($query) => $query->whereNotIn('device_mac', $this->blacklistedDeviceMacs())
+            )
             ->orderBy('device_mac')
             ->orderBy('scanned_at')
             ->orderBy('id')
@@ -321,6 +326,7 @@ class BleScanEventController extends Controller
             ->all();
 
         $excludedMacs = collect($validated['exclude_device_macs'] ?? [])
+            ->merge($this->blacklistedDeviceMacs())
             ->map(fn (mixed $value) => strtolower(trim((string) $value)))
             ->filter()
             ->unique()
@@ -412,6 +418,142 @@ class BleScanEventController extends Controller
         ]);
     }
 
+    public function overviewDashboard(Request $request, Space $space, Room $room): JsonResponse
+    {
+        abort_unless(
+            $request->user()->spaces()->where('spaces.id', $space->id)->exists(),
+            403
+        );
+        abort_unless($room->space_id === $space->id, 404);
+
+        $validated = $request->validate([
+            'since' => 'nullable|date',
+            'until' => 'nullable|date',
+            'window_minutes' => 'nullable|integer|min:1|max:1440',
+            'bucket_minutes' => 'nullable|integer|in:10,30,60',
+            'cell_size' => 'nullable|numeric|min:0.01|max:10',
+            'minimum_confidence' => 'nullable|numeric|min:0|max:1',
+            'limit' => 'nullable|integer|min:1|max:24',
+        ]);
+
+        $until = isset($validated['until'])
+            ? CarbonImmutable::parse($validated['until'])
+            : CarbonImmutable::now();
+        $windowMinutes = isset($validated['window_minutes']) ? (int) $validated['window_minutes'] : 60;
+        $since = isset($validated['since'])
+            ? CarbonImmutable::parse($validated['since'])
+            : $until->subMinutes($windowMinutes);
+
+        if ($since->gt($until)) {
+            [$since, $until] = [$until, $since];
+        }
+
+        $bucketMinutes = isset($validated['bucket_minutes']) ? (int) $validated['bucket_minutes'] : 60;
+        $limit = isset($validated['limit']) ? (int) $validated['limit'] : 5;
+        $generatedRadiomap = $room->generatedRadiomap;
+        $cellSize = isset($validated['cell_size'])
+            ? (float) $validated['cell_size']
+            : (float) ($generatedRadiomap?->grid_step ?: 0.5);
+        $minimumConfidence = isset($validated['minimum_confidence']) ? (float) $validated['minimum_confidence'] : null;
+
+        $anchors = $room->bleAnchors()
+            ->whereNotNull('installed_at')
+            ->latest('installed_at')
+            ->get();
+
+        $estimates = $room->locationEstimates()
+            ->where('estimated_at', '>=', $since)
+            ->where('estimated_at', '<=', $until)
+            ->whereNotNull('x')
+            ->whereNotNull('y')
+            ->when(
+                ! empty($this->blacklistedDeviceMacs()),
+                fn ($query) => $query->whereNotIn('device_mac', $this->blacklistedDeviceMacs())
+            )
+            ->where(function ($query) {
+                $query->whereNull('is_outside')->orWhere('is_outside', false);
+            })
+            ->when($minimumConfidence !== null, fn ($query) => $query->where('confidence', '>=', $minimumConfidence))
+            ->orderBy('estimated_at')
+            ->get();
+
+        $uniqueDeviceCount = $estimates
+            ->pluck('device_mac')
+            ->filter()
+            ->unique()
+            ->count();
+
+        $occupiedCellCount = $estimates
+            ->map(fn (LocationEstimate $estimate) => $this->locationEstimateCellKey($estimate, $cellSize))
+            ->unique()
+            ->count();
+        $totalCellCount = $this->resolveTotalCellCount($generatedRadiomap, $cellSize);
+
+        $timeBuckets = $estimates
+            ->groupBy(fn (LocationEstimate $estimate) => $this->resolveBucketStart(
+                CarbonImmutable::parse($estimate->estimated_at),
+                $bucketMinutes
+            )->toIso8601String())
+            ->map(function ($group, $bucket) {
+                $uniqueDevices = $group
+                    ->pluck('device_mac')
+                    ->filter()
+                    ->unique()
+                    ->count();
+
+                return [
+                    'bucket' => $bucket,
+                    'estimate_count' => $group->count(),
+                    'unique_device_count' => $uniqueDevices,
+                    'average_confidence' => round((float) $group->avg('confidence'), 4),
+                ];
+            })
+            ->sortBy('bucket')
+            ->values();
+
+        $busiestTimeSlots = $timeBuckets
+            ->sortByDesc('unique_device_count')
+            ->take($limit)
+            ->values();
+
+        return response()->json([
+            'space' => [
+                'id' => $space->id,
+                'name' => $space->name,
+            ],
+            'room' => [
+                'id' => $room->id,
+                'name' => $room->name,
+            ],
+            'timespan' => [
+                'since' => $since->toIso8601String(),
+                'until' => $until->toIso8601String(),
+                'window_minutes' => $windowMinutes,
+                'bucket_minutes' => $bucketMinutes,
+            ],
+            'anchor_health' => [
+                'summary' => $this->buildHealthKpis($room),
+                'anchors' => $anchors
+                    ->map(fn (BleAnchor $anchor) => $this->formatHealthAnchor($anchor))
+                    ->values(),
+            ],
+            'occupancy' => [
+                'estimate_count' => $estimates->count(),
+                'unique_device_count' => $uniqueDeviceCount,
+                'occupied_cell_count' => $occupiedCellCount,
+                'total_cell_count' => $totalCellCount,
+                'occupied_cell_rate_percent' => $this->percentage($occupiedCellCount, $totalCellCount ?? 0),
+                'cell_size' => $cellSize,
+            ],
+            'busiest_time_slots' => $busiestTimeSlots,
+            'time_series' => $timeBuckets,
+            'filters' => [
+                'minimum_confidence' => $minimumConfidence,
+                'limit' => $limit,
+            ],
+        ]);
+    }
+
     public function locationEstimates(Request $request, Space $space, Room $room): JsonResponse
     {
         abort_unless(
@@ -431,8 +573,12 @@ class BleScanEventController extends Controller
             ? CarbonImmutable::parse($validated['until'])
             : CarbonImmutable::now();
 
-        $windowMinutes = isset($validated['window_minutes']) ? (int) $validated['window_minutes'] : 5;
-        $minimumAnchorMatches = isset($validated['minimum_anchor_matches']) ? (int) $validated['minimum_anchor_matches'] : 2;
+        $windowMinutes = isset($validated['window_minutes'])
+            ? (int) $validated['window_minutes']
+            : (int) config('services.location_estimator.window_minutes', 5);
+        $minimumAnchorMatches = isset($validated['minimum_anchor_matches'])
+            ? (int) $validated['minimum_anchor_matches']
+            : (int) config('services.location_estimator.minimum_anchor_matches', 2);
 
         $since = isset($validated['since'])
             ? CarbonImmutable::parse($validated['since'])
@@ -444,14 +590,44 @@ class BleScanEventController extends Controller
 
         $generatedRadiomap = $room->generatedRadiomap;
 
-        $result = app(LocationEstimateService::class)->estimateForRoom(
-            $room,
-            $since,
-            $until,
-            $minimumAnchorMatches
-        );
-        $installedAnchorIds = $result['installed_anchor_ids'];
-        $devices = $result['devices'];
+        $installedAnchorIds = $room->bleAnchors()
+            ->whereNotNull('installed_at')
+            ->pluck('id')
+            ->map(fn (mixed $value) => (int) $value)
+            ->values()
+            ->all();
+
+        $devices = $room->locationEstimates()
+            ->where('estimated_at', '>=', $since)
+            ->where('estimated_at', '<=', $until)
+            ->where('matched_anchor_count', '>=', $minimumAnchorMatches)
+            ->when(
+                ! empty($this->blacklistedDeviceMacs()),
+                fn ($query) => $query->whereNotIn('device_mac', $this->blacklistedDeviceMacs())
+            )
+            ->orderBy('device_mac')
+            ->orderBy('estimated_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->get()
+            ->groupBy(fn (LocationEstimate $estimate) => strtolower(trim($estimate->device_mac)))
+            ->map(function ($estimates, $deviceMac) {
+                /** @var LocationEstimate $estimate */
+                $estimate = $estimates->first();
+
+                return [
+                    'location_estimate_id' => $estimate->id,
+                    'device_mac' => $deviceMac,
+                    'device_name' => $estimate->device_name,
+                    'matched_anchors' => $estimate->matched_anchor_count,
+                    'signals' => $estimate->signals,
+                    'latest_scanned_at' => optional($estimate->estimated_at)->toIso8601String(),
+                    'estimated_at' => optional($estimate->estimated_at)->toIso8601String(),
+                    'window_since' => optional($estimate->window_since)->toIso8601String(),
+                    'window_until' => optional($estimate->window_until)->toIso8601String(),
+                    'estimate' => $estimate->estimate,
+                ];
+            })
+            ->values();
 
         return response()->json([
             'space' => [
@@ -483,11 +659,198 @@ class BleScanEventController extends Controller
         ]);
     }
 
+    public function locationEstimateHeatmap(Request $request, Space $space, Room $room): JsonResponse
+    {
+        abort_unless(
+            $request->user()->spaces()->where('spaces.id', $space->id)->exists(),
+            403
+        );
+        abort_unless($room->space_id === $space->id, 404);
+
+        $validated = $request->validate([
+            'since' => 'nullable|date',
+            'until' => 'nullable|date',
+            'window_minutes' => 'nullable|integer|min:1|max:1440',
+            'cell_size' => 'nullable|numeric|min:0.01|max:10',
+            'minimum_confidence' => 'nullable|numeric|min:0|max:1',
+        ]);
+
+        $until = isset($validated['until'])
+            ? CarbonImmutable::parse($validated['until'])
+            : CarbonImmutable::now();
+
+        $windowMinutes = isset($validated['window_minutes']) ? (int) $validated['window_minutes'] : 60;
+        $since = isset($validated['since'])
+            ? CarbonImmutable::parse($validated['since'])
+            : $until->subMinutes($windowMinutes);
+
+        if ($since->gt($until)) {
+            [$since, $until] = [$until, $since];
+        }
+
+        $generatedRadiomap = $room->generatedRadiomap;
+        $cellSize = isset($validated['cell_size'])
+            ? (float) $validated['cell_size']
+            : (float) ($generatedRadiomap?->grid_step ?: 0.5);
+        $minimumConfidence = isset($validated['minimum_confidence']) ? (float) $validated['minimum_confidence'] : null;
+
+        $estimates = $room->locationEstimates()
+            ->where('estimated_at', '>=', $since)
+            ->where('estimated_at', '<=', $until)
+            ->whereNotNull('x')
+            ->whereNotNull('y')
+            ->when(
+                ! empty($this->blacklistedDeviceMacs()),
+                fn ($query) => $query->whereNotIn('device_mac', $this->blacklistedDeviceMacs())
+            )
+            ->where(function ($query) {
+                $query->whereNull('is_outside')->orWhere('is_outside', false);
+            })
+            ->when($minimumConfidence !== null, fn ($query) => $query->where('confidence', '>=', $minimumConfidence))
+            ->orderBy('estimated_at')
+            ->get();
+
+        $cells = $estimates
+            ->groupBy(function (LocationEstimate $estimate) use ($cellSize) {
+                $cellX = floor(((float) $estimate->x) / $cellSize) * $cellSize;
+                $cellY = floor(((float) $estimate->y) / $cellSize) * $cellSize;
+
+                return round($cellX, 4).'|'.round($cellY, 4);
+            })
+            ->map(function ($group, $key) use ($cellSize) {
+                [$cellX, $cellY] = array_map('floatval', explode('|', (string) $key, 2));
+                $count = $group->count();
+                $uniqueDeviceCount = $group
+                    ->pluck('device_mac')
+                    ->filter()
+                    ->unique()
+                    ->count();
+
+                return [
+                    'x' => round($cellX + ($cellSize / 2), 4),
+                    'y' => round($cellY + ($cellSize / 2), 4),
+                    'x_min' => round($cellX, 4),
+                    'x_max' => round($cellX + $cellSize, 4),
+                    'y_min' => round($cellY, 4),
+                    'y_max' => round($cellY + $cellSize, 4),
+                    'count' => $count,
+                    'unique_device_count' => $uniqueDeviceCount,
+                    'average_confidence' => round((float) $group->avg('confidence'), 4),
+                ];
+            })
+            ->sortByDesc('count')
+            ->values();
+
+        $maxCount = (int) ($cells->max('count') ?? 0);
+        $cells = $cells
+            ->map(function (array $cell) use ($maxCount) {
+                $cell['intensity'] = $maxCount > 0 ? round($cell['count'] / $maxCount, 4) : 0;
+
+                return $cell;
+            })
+            ->values();
+
+        return response()->json([
+            'space' => [
+                'id' => $space->id,
+                'name' => $space->name,
+            ],
+            'room' => [
+                'id' => $room->id,
+                'name' => $room->name,
+            ],
+            'generated_radiomap' => $generatedRadiomap ? [
+                'x_range_min' => $generatedRadiomap->x_range_min,
+                'x_range_max' => $generatedRadiomap->x_range_max,
+                'y_range_min' => $generatedRadiomap->y_range_min,
+                'y_range_max' => $generatedRadiomap->y_range_max,
+                'grid_step' => $generatedRadiomap->grid_step,
+            ] : null,
+            'timespan' => [
+                'since' => $since->toIso8601String(),
+                'until' => $until->toIso8601String(),
+                'window_minutes' => $windowMinutes,
+            ],
+            'filters' => [
+                'cell_size' => $cellSize,
+                'minimum_confidence' => $minimumConfidence,
+            ],
+            'stats' => [
+                'estimate_count' => $estimates->count(),
+                'unique_device_count' => $estimates
+                    ->pluck('device_mac')
+                    ->filter()
+                    ->unique()
+                    ->count(),
+                'cell_count' => $cells->count(),
+                'max_cell_count' => $maxCount,
+            ],
+            'cells' => $cells,
+        ]);
+    }
+
     private function buildWindowQuery(Room $room, CarbonImmutable $since, CarbonImmutable $until)
     {
         return $room->bleScanEvents()
             ->where('scanned_at', '>=', $since)
-            ->where('scanned_at', '<=', $until);
+            ->where('scanned_at', '<=', $until)
+            ->when(
+                ! empty($this->blacklistedDeviceMacs()),
+                fn ($query) => $query->whereNotIn('device_mac', $this->blacklistedDeviceMacs())
+            );
+    }
+
+    private function blacklistedDeviceMacs(): array
+    {
+        return BleScanBlacklistedMac::query()
+            ->pluck('device_mac')
+            ->map(fn (mixed $value) => strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function formatHealthAnchor(BleAnchor $anchor): array
+    {
+        return [
+            'id' => $anchor->id,
+            'anchor_uid' => $anchor->anchor_uid,
+            'label' => $anchor->label,
+            'room_id' => $anchor->room_id,
+            'installed_at' => $anchor->installed_at?->toIso8601String(),
+            'health_state' => $anchor->health_state,
+            'health_status' => $anchor->health_status,
+            'health_is_stale' => $anchor->health_is_stale,
+            'last_health_payload_at' => $anchor->health_last_payload_at?->toIso8601String(),
+            'wifi_connected' => $anchor->health_wifi_connected,
+            'mqtt_connected' => $anchor->health_mqtt_connected,
+            'scan_enabled' => $anchor->health_scan_enabled,
+        ];
+    }
+
+    private function locationEstimateCellKey(LocationEstimate $estimate, float $cellSize): string
+    {
+        $cellX = floor(((float) $estimate->x) / $cellSize) * $cellSize;
+        $cellY = floor(((float) $estimate->y) / $cellSize) * $cellSize;
+
+        return round($cellX, 4).'|'.round($cellY, 4);
+    }
+
+    private function resolveTotalCellCount($generatedRadiomap, float $cellSize): ?int
+    {
+        if ($generatedRadiomap === null || $cellSize <= 0) {
+            return null;
+        }
+
+        $width = (float) $generatedRadiomap->x_range_max - (float) $generatedRadiomap->x_range_min;
+        $height = (float) $generatedRadiomap->y_range_max - (float) $generatedRadiomap->y_range_min;
+
+        if ($width <= 0 || $height <= 0) {
+            return null;
+        }
+
+        return (int) (ceil($width / $cellSize) * ceil($height / $cellSize));
     }
 
     private function buildDashboardStats(
