@@ -26,7 +26,7 @@ class RoomWeeklyEstimateController extends Controller
         $estimates = $query->get();
 
         $grouped = $estimates->groupBy('day_of_week')->map(function ($dayEstimates, $dayOfWeek) {
-            $dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            $dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
             return [
                 'day_of_week' => (int) $dayOfWeek,
