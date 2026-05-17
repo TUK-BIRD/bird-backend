@@ -7,6 +7,7 @@ use App\Http\Controllers\BleScanEventController;
 use App\Http\Controllers\RadiomapController;
 use App\Http\Controllers\ReferencePointController;
 use App\Http\Controllers\RoomController;
+use App\Http\Controllers\RoomWeeklyEstimateController;
 use App\Http\Controllers\SpaceController;
 use App\Http\Controllers\SpaceInvitationController;
 use Illuminate\Http\Request;
@@ -68,3 +69,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/location-estimates', [BleScanEventController::class, 'locationEstimates']);
     Route::get('/spaces/{space}/rooms/{room}/ble_scan_events/location-estimates/heatmap', [BleScanEventController::class, 'locationEstimateHeatmap']);
 });
+
+Route::get('/spaces/{space}/rooms/{room}/weekly-estimates', [RoomWeeklyEstimateController::class, 'index']);

@@ -77,6 +77,11 @@ class Room extends Model
         return $this->hasMany(LocationEstimate::class, 'room_id');
     }
 
+    public function weeklyEstimates(): HasMany
+    {
+        return $this->hasMany(RoomWeeklyEstimate::class, 'room_id');
+    }
+
     protected $casts = [
         'blueprint_json' => 'array',
         'info_json' => 'array',
