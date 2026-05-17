@@ -556,10 +556,6 @@ class BleScanEventController extends Controller
 
     public function locationEstimates(Request $request, Space $space, Room $room): JsonResponse
     {
-        abort_unless(
-            $request->user()->spaces()->where('spaces.id', $space->id)->exists(),
-            403
-        );
         abort_unless($room->space_id === $space->id, 404);
 
         $validated = $request->validate([
@@ -567,6 +563,7 @@ class BleScanEventController extends Controller
             'until' => 'nullable|date',
             'window_minutes' => 'nullable|integer|min:1|max:30',
             'minimum_anchor_matches' => 'nullable|integer|min:2|max:20',
+            'minimum_confidence' => 'nullable|numeric|min:0|max:1',
         ]);
 
         $until = isset($validated['until'])
@@ -579,6 +576,9 @@ class BleScanEventController extends Controller
         $minimumAnchorMatches = isset($validated['minimum_anchor_matches'])
             ? (int) $validated['minimum_anchor_matches']
             : (int) config('services.location_estimator.minimum_anchor_matches', 2);
+        $minimumConfidence = isset($validated['minimum_confidence'])
+            ? (float) $validated['minimum_confidence']
+            : 0.7;
 
         $since = isset($validated['since'])
             ? CarbonImmutable::parse($validated['since'])
@@ -601,6 +601,7 @@ class BleScanEventController extends Controller
             ->where('estimated_at', '>=', $since)
             ->where('estimated_at', '<=', $until)
             ->where('matched_anchor_count', '>=', $minimumAnchorMatches)
+            ->where('confidence', '>=', $minimumConfidence)
             ->when(
                 ! empty($this->blacklistedDeviceMacs()),
                 fn ($query) => $query->whereNotIn('device_mac', $this->blacklistedDeviceMacs())
@@ -650,6 +651,7 @@ class BleScanEventController extends Controller
                 'until' => $until->toIso8601String(),
                 'window_minutes' => $windowMinutes,
                 'minimum_anchor_matches' => $minimumAnchorMatches,
+                'minimum_confidence' => $minimumConfidence,
             ],
             'stats' => [
                 'installed_anchor_count' => count($installedAnchorIds),
@@ -661,10 +663,6 @@ class BleScanEventController extends Controller
 
     public function locationEstimateHeatmap(Request $request, Space $space, Room $room): JsonResponse
     {
-        abort_unless(
-            $request->user()->spaces()->where('spaces.id', $space->id)->exists(),
-            403
-        );
         abort_unless($room->space_id === $space->id, 404);
 
         $validated = $request->validate([
